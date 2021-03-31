@@ -12,6 +12,7 @@ from typing import Dict
 from typing import List
 from typing import Optional
 from typing import Tuple
+from typing import Type
 from typing import Union
 
 from sqlalchemy import Column
@@ -38,13 +39,6 @@ __all__ = [
     'Schema',
     'AppConfigUpdate',
     'ConfigFile',
-    'PartNumber',
-    'Device',
-    'Station',
-    'TestStep',
-    'FirmwareVersion',
-    'FirmwareCode',
-    'FirmwareIteration',
     'LightingStation1ResultRow',
     'YamlFile',
     'EEPROMConfig',
@@ -54,6 +48,13 @@ __all__ = [
     'LightingStation3ParamRow',
     'LightingStation3LightMeasurement',
     'LightingStation3ResultRow',
+    'PartNumber',
+    'Device',
+    'Station',
+    'TestStep',
+    'FirmwareVersion',
+    'FirmwareCode',
+    'FirmwareIteration',
     'TestStepProtocol',
     'TestIterationProtocol',
 ]
@@ -74,7 +75,7 @@ class Rel:
     version_to_code = Relationship.one_to_one('FirmwareVersion', 'code', 'FirmwareCode', 'version')
 
 
-Schema: Union[DeclarativeMeta, TableMixin] = declarative_base_factory('main')
+Schema: Union[DeclarativeMeta, Type[TableMixin]] = declarative_base_factory('main')
 
 
 class AppConfigUpdate(Schema):
@@ -98,7 +99,7 @@ class YamlFile(Schema):
     @classmethod
     def get(cls, session: SessionType, fp: str) -> 'YamlFile':
         result: Optional[YamlFile] = session.query(cls).filter(
-            cls.fp == fp, cls.rev == session.query(func.max(AppConfigUpdate.id)).subquery()
+            cls.fp == fp, cls.rev == session.query(func.max(AppConfigUpdate.id)).scalar_subquery()
         ).one_or_none()
         if not result:
             raise ValueError(f'{fp} deprecated or not present in the {cls.__name__} table')
@@ -123,7 +124,7 @@ class LightingStation3Param(Schema):
     @classmethod
     def get(cls, session: SessionType, name: str) -> List['LightingStation3ParamRow']:
         result = session.query(cls).filter(
-            cls.name == name, cls.rev == session.query(func.max(AppConfigUpdate.id)).subquery()
+            cls.name == name, cls.rev == session.query(func.max(AppConfigUpdate.id)).scalar_subquery()
         ).one_or_none()
         if not result:
             raise ValueError(f'{name} deprecated or not present in the {cls.__name__} table')
@@ -222,7 +223,7 @@ class EEPROMConfig(Schema):
         result = session.query(cls).filter(
             cls.name == name, cls.is_initial == is_initial, cls.rev == session.query(
                 func.max(AppConfigUpdate.id)
-            ).subquery()
+            ).scalar_subquery()
         ).one_or_none()
         if not result:
             raise ValueError(
@@ -254,10 +255,10 @@ class Device(Schema):
     sn = Column(Integer, nullable=False)
     uid = Column(String(16), nullable=True)
     part = Rel.pn_to_device.child
-    config_iterations = Rel.device_to_config_iterations.parent
-    firmware_iterations = Rel.device_to_firmware_iterations.parent
+    # config_iterations = Rel.device_to_config_iterations.parent
+    # firmware_iterations = Rel.device_to_firmware_iterations.parent
     # test_iterations = Rel.device_to_test_iterations.parent
-    test_step_iterations = Rel.device_to_test_step_iterations.parent
+    # test_step_iterations = Rel.device_to_test_step_iterations.parent
     # release = Rel.device_to_released_device.parent
 
 
@@ -329,7 +330,7 @@ class EEPROMConfigIteration(Schema):
     dut_id = Device.id_fk()
     station_id = Station.id_fk()
     config_id = EEPROMConfig.id_fk()
-    dut = Rel.device_to_config_iterations.child
+    # dut = Rel.device_to_config_iterations.child
     config = Relationship.child_to_parent(EEPROMConfig)
 
 
@@ -338,7 +339,7 @@ class FirmwareIteration(Schema):
     dut_id = Device.id_fk()
     station_id = Station.id_fk()
     firmware_id = FirmwareVersion.id_fk()
-    dut = Rel.device_to_firmware_iterations.child
+    # dut = Rel.device_to_firmware_iterations.child
     fw = Relationship.child_to_parent(FirmwareVersion)
 
 

@@ -7,7 +7,6 @@ from datetime import datetime
 from glob import glob
 from itertools import starmap
 from pathlib import Path
-from time import perf_counter
 from typing import cast
 from typing import DefaultDict
 from typing import Dict
@@ -63,7 +62,7 @@ _T = TypeVar('_T')
 
 class ConfigUpdate:
     kwargs = dict(
-        echo_sql=True,
+        # echo_sql=True,
         # drop_tables=True,
         # time_session=True,
     )
@@ -170,11 +169,10 @@ class ConfigUpdate:
     @staticmethod
     def _sheet_setup(new: _Path, name: str, sheet: pd.DataFrame) -> Tuple[List, List[Dict]]:
         log.debug(f'checking -> {new.path_key}::{name}')
-        children = []
         records = cast(List[Dict], sheet.to_dict('records'))
         if not records:
             raise ValueError(f'{new.path_key} -> {name} empty')
-        return children, records
+        return [], records
 
     def _make_children(self, children: List, child_cla, records: List[Dict]) -> None:
         for record in records:

@@ -11,7 +11,7 @@ from typing import Callable
 from typing import TypeVar
 
 import sqlalchemy as sa
-from sqlalchemy.ext.declarative.api import DeclarativeMeta
+from sqlalchemy.ext.declarative import DeclarativeMeta
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.orm.session import Session
 from typing_extensions import Protocol
@@ -22,28 +22,26 @@ __all__ = [
     'SessionType',
 ]
 
-
-class SessionManager(Protocol):
-    def __init__(self, expire_on_commit: bool = True) -> None: ...
-
-    def __enter__(self) -> 'SessionType': ...
-
-
-def _raise_if_commit(*args, **kwargs) -> None:
-    raise Exception('must not explicitly invoke .commit()')
-
-
 _T = TypeVar('_T')
 
 
 class SessionType(Session):
-    def make(self, obj: _T) -> _T: ...
+    def make(self: Session, obj: _T) -> _T:
+        self.add(obj)
+        self.flush([obj])
+        return obj
+
+    def context_commit(self) -> None:
+        super().commit()
+
+    def commit(self):
+        raise Exception('must not explicitly invoke .commit()')
 
 
-def make(session: Session, obj: _T) -> _T:
-    session.add(obj)
-    session.flush([obj])
-    return obj
+class SessionManager(Protocol):
+    def __init__(self, expire_on_commit: bool = True) -> None: ...
+
+    def __enter__(self) -> SessionType: ...
 
 
 def connect(logger, schema: DeclarativeMeta, conn_string: str = '',
@@ -56,24 +54,26 @@ def connect(logger, schema: DeclarativeMeta, conn_string: str = '',
     _ = kwargs
 
     log = logger(__name__)
-    log.debug(f'building {conn_string} session manager')
 
     # SUPPRESS-LINTER <attr added to subclass in meta.py>
     # noinspection PyUnresolvedReferences
-    connection = schema.connection_name
+    _connection = schema.connection_name
 
     engine = sa.create_engine(conn_string, echo=echo_sql)
-    log.info(f'connected to {conn_string} db')
+    log.info(f'connected to database: {conn_string}')
 
-    session_constructor = sessionmaker(bind=engine)
+    session_constructor: Callable[[], SessionType] = sessionmaker(bind=engine, class_=SessionType)
+    log.debug(f'built session constructor: {conn_string}')
 
     if drop_tables:
 
+        # noinspection PyUnresolvedReferences
         schema.metadata.drop_all(engine)
-        log.warning(f'dropped {connection} tables')
+        log.warning(f'dropped {_connection} tables')
 
+    # noinspection PyUnresolvedReferences
     schema.metadata.create_all(engine)
-    log.info(f'mapped {connection} schema')
+    log.info(f'mapped {_connection} schema')
 
     @contextmanager
     def session_manager_f(expire_on_commit: bool = True):
@@ -85,8 +85,6 @@ def connect(logger, schema: DeclarativeMeta, conn_string: str = '',
         ti = perf_counter()
         session = session_constructor()
         session.expire_on_commit = expire_on_commit
-        _commit, session.commit = session.commit, _raise_if_commit
-        session.make = make.__get__(session, Session)
 
         try:
             yield session
@@ -96,12 +94,12 @@ def connect(logger, schema: DeclarativeMeta, conn_string: str = '',
             raise e
 
         else:
-            _commit()
+            session.context_commit()
 
         finally:
             session.close()
             if time_session:
                 te = round((perf_counter() - ti) * 1000, 1)
-                log.debug(f'$SESSION-TIME: {te}MS ({connection})')
+                log.debug(f'$SESSION-TIME: {te}MS ({_connection})')
 
     return session_manager_f

@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from sqlalchemy import Table
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.ext.declarative import declared_attr
-from sqlalchemy.ext.declarative.api import DeclarativeMeta
+from sqlalchemy.ext.declarative import DeclarativeMeta
 from sqlalchemy.orm import relationship
 from sqlalchemy.orm.relationships import RelationshipProperty
 

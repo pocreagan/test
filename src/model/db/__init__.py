@@ -20,5 +20,5 @@ class ConnectFunction(Protocol):
 
 
 # noinspection PyTypeChecker
-connect: ConnectFunction = partial(db.connect, conn_string="sqlite:///C:/Projects/instruments/dev/db/main.db",
+connect: ConnectFunction = partial(db.connect, conn_string="sqlite:///C:/Projects/test/dev/db/main.db",
                                    logger=logger, schema=Schema)
