@@ -10,7 +10,9 @@ from src.instruments.dc_power_supplies import DCLevel
 
 __all__ = [
     '_DCPowerSupply',
+    'DCKneeUpdate',
 ]
+
 
 class DCKneeUpdate:
     pass
@@ -33,9 +35,6 @@ class _DCPowerSupply(Logged):
         raise NotImplementedError
 
     def write_settings(self, dc_level: DCLevel = None, output_state: bool = None) -> None:
-        raise NotImplementedError
-
-    def _on_setting_error(self, err_string: str) -> None:
         raise NotImplementedError
 
     def calculate_connection_state(self, calc: Type[ConnectionStateCalcType]) -> ConnectionState:

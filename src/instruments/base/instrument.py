@@ -7,10 +7,10 @@ from typing import Optional
 from typing import Type
 from typing import TypeVar
 
+from src.base.actor.configuration import update_configs_on_object
 # noinspection SpellCheckingInspection
 from src.base import atexit_proxy as atexit
 from src.base import register
-from src.base.actor import configuration
 from src.base.actor import proxy
 from src.base.actor.proxy import CancelledError
 from src.base.decorators import with_method_done
@@ -44,7 +44,7 @@ def instrument_debug(cls: Type[_T]) -> Optional[Type[_T]]:
     return cls
 
 
-class Instrument(Logged, proxy.Mixin, register.Mixin, configuration.Mixin):
+class Instrument(Logged, proxy.Mixin, register.Mixin):
     _should_be_open = False
     TX_WAIT_S: float
 
@@ -56,13 +56,14 @@ class Instrument(Logged, proxy.Mixin, register.Mixin, configuration.Mixin):
 
     def __set_name__(self, owner, name: str) -> None:
         self.instrument_add_to_handler(owner, name)
-        setattr(owner, name, self._instrument)
+        setattr(owner, name, self)
 
     def set_next_tx_time(self) -> None:
         self._next_tx = time() + self.TX_WAIT_S
 
     @register.before('__init__')
     def _instrument_set_constants_(self) -> None:
+        update_configs_on_object(self)
         self._should_be_open = False
         self.name = type(self).__qualname__
 
@@ -226,7 +227,6 @@ class StringInstrument(Instrument):
 
 instruments_joined = with_method_done('proxy_join')
 instruments_spawned = with_method_done('proxy_spawn')
-
 
 
 class InstrumentHandler(register.Mixin, Logged):

@@ -35,7 +35,8 @@ from src.instruments.wet._readers import DTAReader
 __all__ = [
     'WETBadResponseError',
     'WETNoResponseError',
-    'RS485'
+    'RS485',
+    'RS485Error',
 ]
 
 
@@ -572,6 +573,7 @@ class RS485(Instrument):
         self.info('programming FW complete')
 
     def __wet_unit_identity(self, f, sn: int, mn: int):
+        _ = self
         return f(*WETCommandRegister.SERIAL_NUMBER, sn) and f(*WETCommandRegister.MODEL_NUMBER, mn)
 
     @proxy.exposed

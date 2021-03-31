@@ -1,4 +1,5 @@
 import ctypes
+import logging
 from ctypes import c_char_p
 from ctypes import c_int16
 from ctypes import c_int32
@@ -216,5 +217,4 @@ class LightMeter(Instrument):
             raise LightMeterError('failed to calibrate') from e
 
     def _instrument_debug(self) -> None:
-        for _ in range(100):
-            self.measure()
+        [self.measure() for _ in range(10)]

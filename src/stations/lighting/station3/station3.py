@@ -11,7 +11,7 @@ from typing import Type
 
 from src.base.general import test_nom_tol
 from src.base.log import logger
-from src.controller.test_station import TestStation
+from src.stations.test_station import TestStation
 from src.instruments.base.instrument import instruments_joined
 from src.instruments.base.instrument import instruments_spawned
 from src.instruments.dc_power_supplies import DCLevel
@@ -135,6 +135,8 @@ class Station3(TestStation):
         # program and thermal as indicated
         if self.model.firmware is not None:
             # check for chroma communication, if no bootloader at least that's a test failure
+
+            # noinspection PyUnresolvedReferences
             if not self.ftdi.wet_at_least_bootloader().resolve():
                 return self.test_failure('failed to establish communication with the chroma')
 

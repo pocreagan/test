@@ -17,9 +17,9 @@ import yaml as yml
 __all__ = [
     'Configuration',
     'get_configs_on_object',
+    'update_configs_on_object',
 ]
 
-from src.base import register
 from src.base.general import setdefault_attr_from_factory
 
 _T = TypeVar('_T')
@@ -171,10 +171,8 @@ class Configuration:
     #     return _ConfigFrom(obj, _ConfigFieldFromObj, obj.__qualname__)
 
 
-class Mixin(register.Mixin):
-    @register.before('__init__')
-    def _config_from_shared_drive(self) -> None:
-        [config.update_from_shared_drive() for config in get_configs_on_object(self)]
+def update_configs_on_object(obj) -> None:
+    [config.update_from_shared_drive() for config in get_configs_on_object(obj)]
 
 
 def from_yml(fp: _PATH_T, header: str = None) -> _ConfigFrom:
