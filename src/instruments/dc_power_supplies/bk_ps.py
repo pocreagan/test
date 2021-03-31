@@ -1,7 +1,9 @@
+import logging
 from time import time
-from typing import cast
+from typing import cast, Callable
 from typing import Tuple
 
+from src.instruments.dc_power_supplies.connection_states import LightLineV1ConnectionState
 from src.base import register
 from src.base.actor import proxy
 from src.base.actor import configuration
@@ -9,7 +11,7 @@ from src.instruments.base.instrument import instrument_debug
 from src.instruments.base.instrument import InstrumentError
 from src.instruments.base.visa import VISA
 from src.instruments.dc_power_supplies import DCLevel
-from src.instruments.dc_power_supplies.base import _DCPowerSupply
+from src.instruments.dc_power_supplies.base import _DCPowerSupply, DCKneeUpdate
 
 __all__ = [
     'BKPowerSupply',
@@ -23,10 +25,11 @@ class BKPowerSupplyError(InstrumentError):
 
 @instrument_debug
 class BKPowerSupply(VISA, _DCPowerSupply):
-    def calculate_knee(self, percent_of_max: float) -> DCLevel:
+    def calculate_knee(self, percent_of_max: float, num_steps: int, top: float, bottom: float,
+                       consumer: Callable[[DCKneeUpdate], None]) -> float:
         raise NotImplementedError
 
-    # ? W:\TestStation Data Backup\instruments\data\9200_Series_manual.pdf
+    # ? W:\Test Data Backup\test\doc\9200_Series_manual.pdf
     _config = configuration.from_yml(r'instruments\bk_power_supply.yml')
     display_name = _config.field(str)
     PATTERN = _config.field(str)
@@ -150,7 +153,9 @@ class BKPowerSupply(VISA, _DCPowerSupply):
         if fresh:
             self._instrument_delay(self.next_meas - time())
             self.next_meas = time() + self.MEASUREMENT_WAIT
-        return DCLevel(*list(map(self.read, [self.__Command.GET_VOLT, self.__Command.GET_CURR])))
+        meas = DCLevel(*list(map(self.read, [self.__Command.GET_VOLT, self.__Command.GET_CURR])))
+        self.info(meas, f'fresh={fresh}')
+        return meas
 
     @proxy.exposed
     def ramp_up(self):
@@ -167,9 +172,11 @@ class BKPowerSupply(VISA, _DCPowerSupply):
         return _DCPowerSupply.off(self)
 
     def _instrument_debug(self) -> None:
+        self.log_level(logging.INFO)
+        self.calculate_connection_state(LightLineV1ConnectionState)
         self.ramp_up()
-        self.measure()
+        self.measure(fresh=True)
         self.write_settings(DCLevel(0., 0.))
         tf = time() + 5
         while time() < tf:
-            self.info(self.measure())
+            self.measure(fresh=True)
