@@ -1,0 +1,7 @@
+<component name="ProjectRunConfigurationManager">
+    <configuration default="false" name="view_test_report" type="JavascriptDebugType"
+                   uri="http://localhost:63342/test_framework/reports/testing/Test Results - test_all.html"
+                   useBuiltInWebServerPort="true">
+        <method v="2"/>
+    </configuration>
+</component>

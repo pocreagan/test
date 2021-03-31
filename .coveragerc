@@ -1,0 +1,29 @@
+[run]
+branch = True
+
+source =
+    src/framework/base
+    tests/base
+
+omit =
+    *__init__*
+    *_skipped*
+
+[report]
+
+show_missing = True
+
+precision = 3
+
+exclude_lines =
+
+    pragma: no cover
+    \? SUPPRESS-COVERAGE
+    raise NotImplementedError
+    assert\s
+    def __del__
+    if False:
+    if 0:
+    while False:
+    while 0:
+    if __name__ == .__main__.:

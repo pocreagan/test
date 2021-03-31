@@ -1,0 +1,30 @@
+{
+  "workbench.colorTheme": "Sublime Monokai",
+  "git.ignoreMissingGitWarning": true,
+  "terminal.integrated.env.osx": {
+    "PYTHONPATH": "${env:PYTHONPATH}:${workspaceFolder}/src"
+  },
+  "terminal.integrated.env.linux": {
+    "PYTHONPATH": "${env:PYTHONPATH}:${workspaceFolder}/src"
+  },
+  "terminal.integrated.env.windows": {
+    "PYTHONPATH": "${env:PYTHONPATH};${workspaceFolder}/src"
+  },
+  "python.envFile": "${workspaceFolder}/.env",
+  "python.linting.pylintEnabled": true,
+  "python.testing.pytestArgs": [
+    "."
+  ],
+  "python.testing.unittestEnabled": false,
+  "python.testing.nosetestsEnabled": false,
+  "python.testing.pytestEnabled": true,
+  "python.pythonPath": "C:\\Users\\pcreagan\\.virtualenvs\\test_framework-bX_jRMK4\\Scripts\\python.exe",
+  "python.linting.enabled": true,
+  "files.autoSaveDelay": 500,
+  "files.autoSave": "afterDelay",
+  "python.testing.autoTestDiscoverOnSaveEnabled": false,
+  "files.exclude": {
+    "**/__pycache__": true
+  },
+  "window.title": "VSCode${separator}${folderPath}${separator}${activeEditorShort}${dirty}"
+}

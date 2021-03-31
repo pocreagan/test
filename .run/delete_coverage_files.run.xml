@@ -1,0 +1,12 @@
+<component name="ProjectRunConfigurationManager">
+    <configuration default="false" name="delete_coverage_files" type="BatchConfigurationType"
+                   factoryName="Batch">
+        <module name="test_framework"/>
+        <option name="INTERPRETER_OPTIONS" value=""/>
+        <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/scripts"/>
+        <option name="PARENT_ENVS" value="true"/>
+        <option name="SCRIPT_NAME" value="delete_coverage_files.cmd"/>
+        <option name="PARAMETERS" value=""/>
+        <method v="2"/>
+    </configuration>
+</component>

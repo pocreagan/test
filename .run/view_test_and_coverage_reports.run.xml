@@ -1,0 +1,7 @@
+<component name="ProjectRunConfigurationManager">
+    <configuration default="false" name="view_test_and_coverage_reports" type="CompoundRunConfigurationType">
+        <toRun name="build_debug_binary" type="BatchConfigurationType"/>
+        <toRun name="build_production_binary" type="BatchConfigurationType"/>
+        <method v="2"/>
+    </configuration>
+</component>

@@ -1,0 +1,16 @@
+/.venv/
+/dev/*
+build/bin/*
+build/dat/*
+/.idea/
+/c/
+/.pytest_cache/
+/__pycache__/
+/.mypy_cache/
+/.ropeproject/
+/reports/
+*.py[cod]
+**/temp/
+**/jar/
+*.vi
+.magicindex*
