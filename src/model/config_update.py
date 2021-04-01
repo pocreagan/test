@@ -22,6 +22,7 @@ import yaml as yml
 from sqlalchemy import func
 from sqlalchemy import Table
 
+from instruments.wet._readers import DTAReader
 from model.db.helper import make_hash
 from model.db.schema import FirmwareCode
 from model.db.schema import FirmwareVersion
@@ -87,11 +88,19 @@ class ConfigUpdate:
 
     def test(self) -> None:
         with self.session_manager() as session:
-            print(EEPROMConfig.get(session, '938 ArenaPar WRMA', False))
+            code = FirmwareVersion.get(session, r'lighting\firmware\80-01003_Lighting_Application_2932.dta')
+            print(code[0])
+            print(len(code))
+            data = DTAReader.read(
+                r"W:\Test Data Backup\test\versioned\lighting\firmware\80-01003_Lighting_Application_2932.dta"
+            )
+            print(data[0])
+            print(len(data))
 
-    def update(self) -> None:
-        if subprocess.check_output("git diff --quiet || echo 'dirty'", shell=True).decode().strip() != '':
-            raise ConfigError('working tree must be clean to perform config update.')
+    def update(self, check_dirty: bool = True) -> None:
+        if check_dirty:
+            if subprocess.check_output("git diff --quiet || echo 'dirty'", shell=True).decode().strip() != '':
+                raise ConfigError('working tree must be clean to perform config update.')
 
         self.new = 0
         self.object_id_dict = defaultdict(set)
@@ -186,8 +195,8 @@ class ConfigUpdate:
                 obj = self.session.make(FirmwareCode(code=code, hashed=hashed))
 
             obj = self.session.make(FirmwareVersion(
-                code=obj, name=new.path_key, rev=self.rev,
-                version=int(FirmwareVersion.fp_to_fields_re.findall(str(new.filepath)[0]))
+                code=[obj], name=new.path_key, rev=self.rev,
+                version=int(FirmwareVersion.fp_to_fields_re.findall(str(new.filepath))[0])
             ))
 
             self.new += 1
@@ -290,7 +299,5 @@ class ConfigUpdate:
 if __name__ == '__main__':
     with logger:
         updater = ConfigUpdate()
-        with updater.session_manager() as session:
-            updater.session = session
-            print(updater.make_roster('.dta'))
+        updater.update(check_dirty=False)
         # updater.test()
