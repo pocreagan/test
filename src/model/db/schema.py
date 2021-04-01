@@ -110,7 +110,7 @@ class YamlFile(Schema):
     content = Column(Text, nullable=False)
 
     @classmethod
-    def get(cls, session: SessionType, fp: str) -> 'YamlFile':
+    def get(cls, session: SessionType, fp: str) -> Dict[str, Any]:
         result: Optional[YamlFile] = session.query(cls).filter(
             cls.fp == fp, cls.rev == session.query(func.max(AppConfigUpdate.id)).scalar_subquery()
         ).one_or_none()

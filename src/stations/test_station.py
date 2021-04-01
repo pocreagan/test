@@ -115,11 +115,12 @@ class TestStep(Generic[_STEP_MODEL_T]):
 class TestStation(instrument.InstrumentHandler, Logged):
     _iteration_model_cla: Type[TestIterationProtocol]
 
+    session_manager: Type[SessionManager]
     unit: DUTIdentityModel
     model: Type
     session: SessionType
     iteration: TestIterationProtocol
-    model_configs: Dict[int, Any]
+    config: Dict[str, Any]
 
     def __init__(self, session_manager: Type[SessionManager],
                  view_emit: Callable = None) -> None:
@@ -128,6 +129,8 @@ class TestStation(instrument.InstrumentHandler, Logged):
         with self.session_manager() as session:
             YamlFile.update_object(session, self)
             [YamlFile.update_object(session, inst) for inst in self.instruments.values()]
+        # noinspection PyTypeChecker
+        self.model = self.build_test_model()
 
     def test_failure(self, msg) -> Literal[False]:
         self.emit(msg)
@@ -145,7 +148,6 @@ class TestStation(instrument.InstrumentHandler, Logged):
 
         try:
             with self.session_manager() as session:
-                self.model = self.get_test_model(session, self.model_configs, unit)
                 self.session = session
                 self.iteration = self.session.make(self.get_test_iteration())
                 self.perform_test()
@@ -165,10 +167,7 @@ class TestStation(instrument.InstrumentHandler, Logged):
         """
         raise NotImplementedError
 
-    @classmethod
-    def get_test_model(cls, session: SessionType,
-                       model_configs: Dict[int, Any],
-                       unit: DUTIdentityModel):
+    def build_test_model(self):
         """
         build test model from unit identity from database config and params rows
         """

@@ -1,15 +1,13 @@
 import json
-import os
 import subprocess
 from collections import defaultdict
+from dataclasses import InitVar
 from dataclasses import dataclass
 from dataclasses import field
-from dataclasses import InitVar
 from datetime import datetime
 from glob import glob
 from itertools import starmap
 from pathlib import Path
-from typing import cast
 from typing import DefaultDict
 from typing import Dict
 from typing import List
@@ -17,11 +15,12 @@ from typing import Set
 from typing import Tuple
 from typing import Type
 from typing import TypeVar
+from typing import cast
 
 import pandas as pd
 import yaml as yml
-from sqlalchemy import func
 from sqlalchemy import Table
+from sqlalchemy import func
 
 from src.base.db.connection import SessionType
 from src.base.log import logger
@@ -69,7 +68,7 @@ _T = TypeVar('_T')
 class ConfigUpdate:
     kwargs = dict(
         # echo_sql=True,
-        drop_tables=True,
+        # drop_tables=True,
     )
     params_objects = ((r'lighting/station3/params.xlsx', LightingStation3Param, LightingStation3ParamRow),)
     new: int
@@ -88,23 +87,20 @@ class ConfigUpdate:
             print(EEPROMConfig.get(session, '938 ArenaPar WRMA', False))
 
     def update(self) -> None:
-        if subprocess.check_output(
-            "git diff --quiet || echo 'dirty'", shell=True
-        ).decode().strip() != '':
+        if subprocess.check_output("git diff --quiet || echo 'dirty'", shell=True).decode().strip() != '':
             raise ConfigError('working tree must be clean to perform config update.')
-        git_hash = subprocess.run(
-            ['git', 'rev-parse', '--verify', 'HEAD'], capture_output=True, text=True
-        )
 
         self.new = 0
         self.object_id_dict = defaultdict(set)
         with self.session_manager() as session:
             self.session = session
-            self.app_config_obj = self.session.make(AppConfigUpdate(commit=git_hash.stdout))
+            self.app_config_obj = self.session.make(AppConfigUpdate(commit=subprocess.run(
+                ['git', 'rev-parse', '--verify', 'HEAD'], capture_output=True, text=True
+            ).stdout))
             self.rev = self.app_config_obj.id
-            self.handle_yml()
             self.handle_eeprom_xlsx()
             list(starmap(self.handle_params_xlsx, self.params_objects))
+            self.handle_yml()
             self.app_config_obj.objects = json.dumps(
                 {k: list(v) for k, v in self.object_id_dict.items()}
             )

@@ -8,9 +8,8 @@ from typing import Optional
 from typing import Tuple
 from typing import Type
 
-from base.actor import configuration
-from base.db.connection import SessionType
-from model.db.schema import TestIterationProtocol, LightingStation3LightMeterCalibration, EEPROMConfig, YamlFile
+from src.base.actor import configuration
+from src.base.db.connection import SessionType, SessionManager
 from src.base.general import test_nom_tol
 from src.base.log import logger
 from src.instruments.base.instrument import instruments_joined
@@ -28,8 +27,8 @@ from src.model.db.schema import LightingStation3LightMeasurement
 from src.model.db.schema import LightingStation3Param
 from src.model.db.schema import LightingStation3ParamRow
 from src.model.db.schema import LightingStation3ResultRow
+from src.model.db.schema import TestIterationProtocol, LightingStation3LightMeterCalibration, EEPROMConfig
 from src.stations.test_station import TestStation
-from stations.test_station import DUTIdentityModel
 
 log = logger(__name__)
 
@@ -57,14 +56,26 @@ class Station3(TestStation):
     def get_test_iteration(self) -> TestIterationProtocol:
         raise NotImplementedError
 
-    @classmethod
-    def get_test_model(cls, session: SessionType, model_configs: Dict[str, Any], unit: DUTIdentityModel):
-        config_dict: Dict[str, Any] = model_configs.get(str(unit.mn)).copy()
+    def build_test_model(self) -> Dict[int, Dict[Optional[str], Station3TestModel]]:
+        model_dict = {}
+        with self.session_manager(expire=True) as session:
+            for mn, model_config in self.model_configs.items():
+                model_dict[int(mn)]: Dict[Optional[str], Station3TestModel] = {opt: self.build_test_model_for_mn_option(
+                    session, model_config, opt
+                ) for opt in [None] + list(model_config.get('options', {}).keys())}
+        # noinspection PyTypeChecker
+        return model_dict
+
+    def build_test_model_for_mn_option(
+            self, session: SessionType, model_config: Dict[str, Any], option: Optional[str]
+    ) -> Station3TestModel:
+        _ = self
+        config_dict: Dict[str, Any] = model_config.copy()
         if 'options' in config_dict:
             model_options = config_dict.pop('options')
             config_dict.update(model_options.get('default', {}))
-            if unit.option:
-                config_dict.update(model_options.get(unit.option, {}))
+            if option:
+                config_dict.update(model_options.get(option, {}))
         model = Station3TestModel(**config_dict)
         model.string_params_rows = LightingStation3Param.get(session, model.param_sheet)
         model.connection_calc_type = getattr(connection_states, model.connection_calc)
@@ -74,6 +85,8 @@ class Station3(TestStation):
                 setattr(model, f'{cfg_name}_registers', EEPROMConfig.get(
                     session, cfg_sheet_name, is_initial=bool(initial)
                 ))
+        if (model.firmware_force_overwrite or model.program_with_thermal) and not model.firmware:
+            raise ValueError('fw version must be specified if firmware_force_overwrite or program_with_thermal')
         return model
 
     ps = BKPowerSupply()
@@ -230,13 +243,10 @@ class Station3(TestStation):
 
 if __name__ == '__main__':
     with logger:
-        unit = DUTIdentityModel(9000000, 918, 'b')
-        session_manager = connect(echo_sql=True)
-        with session_manager(expire_on_commit=False) as session:
-            model = Station3.get_test_model(
-                session, YamlFile.get(session, r'lighting\station3\station3.yml').get('model_configs'), unit
-            )
-        print(model)
+        # unit = DUTIdentityModel(9000000, 918, 'b')
+        # session_manager = connect(echo_sql=True)
+        station = Station3(connect(echo_sql=True))
+        print(station.model)
 
         # test = Station3(connect(echo_sql=True))
         # test.instruments_setup()

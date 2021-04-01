@@ -39,7 +39,7 @@ class SessionType(Session):
 
 
 class SessionManager(Protocol):
-    def __init__(self, expire_on_commit: bool = True) -> None: ...
+    def __init__(self, expire: bool = True) -> None: ...
 
     def __enter__(self) -> SessionType: ...
 
@@ -75,14 +75,14 @@ def connect(logger, schema: DeclarativeMeta, conn_string: str = '',
     log.info(f'mapped {_connection} schema')
 
     @contextmanager
-    def session_manager_f(expire_on_commit: bool = True):
+    def session_manager_f(expire: bool = True):
         """
         provide a transactional scope around a series of operations
         """
         # ? https://docs.sqlalchemy.org/en/13/orm/session_basics.html
 
         session = session_constructor()
-        session.expire_on_commit = expire_on_commit
+        session.expire_on_commit = expire
 
         try:
             yield session
