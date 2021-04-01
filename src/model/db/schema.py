@@ -82,6 +82,7 @@ Schema: Union[DeclarativeMeta, Type[TableMixin]] = declarative_base_factory('mai
 
 class AppConfigUpdate(Schema):
     _repr_fields = ['created_at']
+    commit = Column(String(40), nullable=False)
     objects = Column(Text)
 
 

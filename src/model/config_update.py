@@ -1,4 +1,5 @@
 import json
+import os
 import subprocess
 from collections import defaultdict
 from dataclasses import dataclass
@@ -58,6 +59,10 @@ def _find_files(ext: str) -> Dict[str, _Path]:
     )))}
 
 
+class ConfigError(Exception):
+    pass
+
+
 _T = TypeVar('_T')
 
 
@@ -83,13 +88,19 @@ class ConfigUpdate:
             print(EEPROMConfig.get(session, '938 ArenaPar WRMA', False))
 
     def update(self) -> None:
-        git_hash = subprocess.run(['git', 'rev-parse', '--verify', 'HEAD'], capture_output=True, text=True)
+        if subprocess.check_output(
+            "git diff --quiet || echo 'dirty'", shell=True
+        ).decode().strip() != '':
+            raise ConfigError('working tree must be clean to perform config update.')
+        git_hash = subprocess.run(
+            ['git', 'rev-parse', '--verify', 'HEAD'], capture_output=True, text=True
+        )
 
         self.new = 0
         self.object_id_dict = defaultdict(set)
         with self.session_manager() as session:
             self.session = session
-            self.app_config_obj = self.session.make(AppConfigUpdate())
+            self.app_config_obj = self.session.make(AppConfigUpdate(commit=git_hash))
             self.rev = self.app_config_obj.id
             self.handle_yml()
             self.handle_eeprom_xlsx()
