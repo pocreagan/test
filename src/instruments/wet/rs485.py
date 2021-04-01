@@ -553,19 +553,19 @@ class RS485(Instrument):
         return self.dta_boot_reset()
 
     @proxy.exposed
-    def dta_program_firmware(self, fp: FP_T, consumer: Callable[..., None] = None) -> None:
+    def dta_program_firmware(self, packets: List[bytes], version, consumer: Callable[..., None] = None) -> None:
         consumer = consumer if callable(consumer) else self.info
         data: DTA_T = DTAReader.read(fp)
         version = int(re.findall(r'(?i)(\d+)\.dta$', str(fp))[0])
 
-        self.info(f'programming FW v{version} from {fp}')
+        self.info(f'programming FW version={version}')
 
-        consumer(FirmwareSetup(version, len(data)))
+        consumer(FirmwareSetup(version, len(packets)))
 
         with self.ser.baud(9600):
-            for i, chunk in enumerate(data):
-                consumer(FirmwareIncrement(i))
+            for i, chunk in enumerate(packets):
                 self.ser.send(chunk)
+                consumer(FirmwareIncrement(i))
 
         self.dta_boot_reset()
         self.__wait_for_reset()

@@ -16,6 +16,7 @@ from typing import Tuple
 from typing import Type
 from typing import Union
 
+import funcy
 from sqlalchemy import Column
 from sqlalchemy import func
 from sqlalchemy import UniqueConstraint
@@ -307,30 +308,41 @@ class TestStep(Schema):
     # iterations = Rel.stage_to_iterations.parent
 
 
+firmware_association_table = Relationship.association(
+    Schema, 'FirmwareVersion', 'code', 'FirmwareCode', 'version'
+)
+
+
 class FirmwareVersion(Schema):
-    _repr_fields = ['pn', 'version', ]
-    fp_to_fields_re = re.compile(r'(?i)\\80-(\d+)_\D+(\d+)\.dta')
+    _repr_fields = ['name', 'version', ]
+    fp_to_fields_re = re.compile(r'(?i)(\d+)\.dta')
 
-    pn = Column(Integer, nullable=False)
+    rev = Column(Integer, nullable=False)
+    name = Column(String(128), nullable=False)
     version = Column(Integer, nullable=False)
-    code = Rel.version_to_code.parent
-
-    __table_args__ = (
-        UniqueConstraint('pn', 'version'),
-    )
+    code = firmware_association_table.parent
 
     @classmethod
     def make_from(cls, fp: Path) -> 'FirmwareVersion':
         pn, version = cls.fp_to_fields_re.findall(str(fp))[0]
-        return FirmwareVersion(pn=int(pn), version=int(version), code=FirmwareCode.get_from(fp))
+        return cls(name=fp.name, version=int(version), code=FirmwareCode.get_from(fp))
+
+    @classmethod
+    def get(cls, session: SessionType, name: str) -> List[bytes]:
+        result = session.query(cls).filter(
+            cls.name == name, cls.rev == session.query(func.max(AppConfigUpdate.id)).scalar_subquery()
+        ).one_or_none()
+        if not result:
+            raise ValueError(f'{name} deprecated or not present in the {cls.__name__} table')
+        return list(map(bytes, funcy.chunks(271, map(int, result.code.code))))
 
 
 class FirmwareCode(Schema):
     _repr_fields = ['hash', ]
     fw_id = FirmwareVersion.id_fk()
     code = Column(LargeBinary, nullable=False)
-    hashed = Column(String(32), default=make_hash_f, onupdate=make_hash_f, unique=True)
-    version = Rel.version_to_code.child
+    hashed = Column(String(32), nullable=False)
+    version = firmware_association_table.child
 
     @classmethod
     def get_from(cls, fp: Path) -> 'FirmwareCode':

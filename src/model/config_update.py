@@ -1,13 +1,14 @@
 import json
 import subprocess
 from collections import defaultdict
-from dataclasses import InitVar
 from dataclasses import dataclass
 from dataclasses import field
+from dataclasses import InitVar
 from datetime import datetime
 from glob import glob
 from itertools import starmap
 from pathlib import Path
+from typing import cast
 from typing import DefaultDict
 from typing import Dict
 from typing import List
@@ -15,13 +16,15 @@ from typing import Set
 from typing import Tuple
 from typing import Type
 from typing import TypeVar
-from typing import cast
 
 import pandas as pd
 import yaml as yml
-from sqlalchemy import Table
 from sqlalchemy import func
+from sqlalchemy import Table
 
+from model.db.helper import make_hash
+from model.db.schema import FirmwareCode
+from model.db.schema import FirmwareVersion
 from src.base.db.connection import SessionType
 from src.base.log import logger
 from src.model.db import connect
@@ -98,6 +101,7 @@ class ConfigUpdate:
                 ['git', 'rev-parse', '--verify', 'HEAD'], capture_output=True, text=True
             ).stdout))
             self.rev = self.app_config_obj.id
+            self.handle_firmware()
             self.handle_eeprom_xlsx()
             list(starmap(self.handle_params_xlsx, self.params_objects))
             self.handle_yml()
@@ -165,6 +169,30 @@ class ConfigUpdate:
 
             self.new += 1
             self.make_file_record(new, [obj])
+            self.add_to_app_update(obj)
+
+    def handle_firmware(self) -> None:
+        for new in self.make_roster('.dta'):
+            log.debug(f'checking -> {new.path_key}')
+
+            with open(new.filepath, 'rb') as dat:
+                code = dat.read()
+            hashed = make_hash(code)
+
+            obj = self.session.query(FirmwareCode).filter(
+                FirmwareCode.code == code,
+            ).one_or_none()
+            if obj is None:
+                obj = self.session.make(FirmwareCode(code=code, hashed=hashed))
+
+            obj = self.session.make(FirmwareVersion(
+                code=obj, name=new.path_key, rev=self.rev,
+                version=int(FirmwareVersion.fp_to_fields_re.findall(str(new.filepath)[0]))
+            ))
+
+            self.new += 1
+            self.make_file_record(new, [obj])
+            # noinspection PyTypeChecker
             self.add_to_app_update(obj)
 
     @staticmethod
@@ -262,5 +290,7 @@ class ConfigUpdate:
 if __name__ == '__main__':
     with logger:
         updater = ConfigUpdate()
-        updater.update()
-        updater.test()
+        with updater.session_manager() as session:
+            updater.session = session
+            print(updater.make_roster('.dta'))
+        # updater.test()

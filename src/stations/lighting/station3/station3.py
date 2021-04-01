@@ -189,6 +189,7 @@ class Station3(TestStation):
             self.ftdi.wet_send_reset(wait_after=wait_after)
             return True
 
+    @instruments_spawned
     def perform_test(self, unit: DUTIdentityModel) -> bool:
         model = self.model.get(unit.mn).get(unit.option)
         remaining_rows = model.string_params_rows.copy()
