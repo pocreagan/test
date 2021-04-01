@@ -2,11 +2,13 @@
 declarative models should inherit from (meta.Base, meta.TableMixin)
 default factories should be declared in helper.py
 """
+import datetime
 import json
 import re
 import traceback
+from dataclasses import dataclass
+from dataclasses import field
 from operator import attrgetter
-from pathlib import Path
 from typing import Any
 from typing import Dict
 from typing import List
@@ -15,6 +17,7 @@ from typing import Tuple
 from typing import Type
 from typing import Union
 
+import funcy
 from sqlalchemy import Column
 from sqlalchemy import func
 from sqlalchemy import UniqueConstraint
@@ -32,7 +35,6 @@ from typing_extensions import Protocol
 from src.base.actor.configuration import get_configs_on_object
 from src.base.db.connection import SessionType
 from src.base.db.meta import *
-from src.model.db.helper import *
 from src.model.enums import *
 
 __all__ = [
@@ -41,6 +43,7 @@ __all__ = [
     'ConfigFile',
     'LightingStation1ResultRow',
     'YamlFile',
+    'Configuration',
     'EEPROMConfig',
     'EEPROMRegister',
     'EEPROMConfigIteration',
@@ -48,10 +51,12 @@ __all__ = [
     'LightingStation3ParamRow',
     'LightingStation3LightMeasurement',
     'LightingStation3ResultRow',
+    'LightingStation3LightMeterCalibration',
     'PartNumber',
     'Device',
     'Station',
     'TestStep',
+    'Firmware',
     'FirmwareVersion',
     'FirmwareCode',
     'FirmwareIteration',
@@ -72,6 +77,17 @@ class Rel:
     device_to_test_step_iterations = Relationship.one_to_many('Device', 'test_step_iterations',
                                                               'EEPROMConfigIteration',
                                                               'dut')
+    lighting_station3_result_row_to_light_measurements = Relationship.one_to_many(
+        'LightingStation3ResultRow',
+        'light_measurements',
+        'LightingStation3LightMeasurement',
+        'result_row'
+    )
+    lighting_station3_iteration_results = Relationship.one_to_many(
+        'LightingStation3Iteration', 'result_rows',
+        'LightingStation3ResultRow',
+        'test_iteration'
+    )
     version_to_code = Relationship.one_to_one('FirmwareVersion', 'code', 'FirmwareCode', 'version')
 
 
@@ -80,6 +96,7 @@ Schema: Union[DeclarativeMeta, Type[TableMixin]] = declarative_base_factory('mai
 
 class AppConfigUpdate(Schema):
     _repr_fields = ['created_at']
+    commit = Column(String(40), nullable=False)
     objects = Column(Text)
 
 
@@ -90,6 +107,16 @@ class ConfigFile(Schema):
     children = Column(Text)
 
 
+class LightingStation3LightMeterCalibration(Schema):
+    _repr_fields = ['created_at']
+
+    @classmethod
+    def is_up_to_date(cls, session: SessionType, interval_hours: int) -> bool:
+        return session.query(cls).filter(
+            cls.created_at > (datetime.datetime.now() - datetime.timedelta(hours=interval_hours))
+        ).first() is not None
+
+
 class YamlFile(Schema):
     _repr_fields = ['fp', 'created_at']
     rev = Column(Integer, nullable=False)
@@ -97,7 +124,7 @@ class YamlFile(Schema):
     content = Column(Text, nullable=False)
 
     @classmethod
-    def get(cls, session: SessionType, fp: str) -> 'YamlFile':
+    def get(cls, session: SessionType, fp: str) -> Dict[str, Any]:
         result: Optional[YamlFile] = session.query(cls).filter(
             cls.fp == fp, cls.rev == session.query(func.max(AppConfigUpdate.id)).scalar_subquery()
         ).one_or_none()
@@ -132,7 +159,7 @@ class LightingStation3Param(Schema):
 
 
 class LightingStation3ParamRow(Schema):
-    _repr_fields = ['x_nom', 'y_nom', 'color_dist_max', 'fcd_nom',
+    _repr_fields = ['dmx_control_dict', 'x_nom', 'y_nom', 'color_dist_max', 'fcd_nom',
                     'fcd_tol', 'p_nom', 'p_tol', 'pct_drop_max']
     param_id = LightingStation3Param.id_fk()
     params = lighting_station3_rows_association_table.child
@@ -163,53 +190,20 @@ class LightingStation3ParamRow(Schema):
 
     @property
     def dmx_control_dict(self) -> Dict[int, float]:
-        return {ch: getattr(self, f'dmx_ch{ch}') for ch in range(1, 11)}
-
-
-light_measurement_association_table = Relationship.association(
-    Schema, 'LightingStation3ResultRow', 'light_measurements',
-    'LightingStation3LightMeasurement', 'result_rows'
-)
-
-
-class LightingStation3ResultRow(Schema):
-    _repr_fields = ['x', 'y', 'fcd', 'p', 'pct_drop', ]
-    param_row_id = LightingStation3ParamRow.id_fk()
-    param_row = Relationship.child_to_parent(LightingStation3ParamRow)
-    light_measurements = light_measurement_association_table.parent
-    t = Column(DateTime, nullable=False)
-    x = Column(Float, nullable=False)
-    y = Column(Float, nullable=False)
-    fcd = Column(Float, nullable=False)
-    cct = Column(Float, nullable=False)
-    duv = Column(Float, nullable=False)
-    p = Column(Float, nullable=False)
-    pct_drop = Column(Float, nullable=False)
-    cie_dist = Column(Float)
-    cie_pf = Column(Boolean, default=False)
-    fcd_pf = Column(Boolean, default=False)
-    p_pf = Column(Boolean, default=False)
-    pct_drop_pf = Column(Boolean, default=False)
-
-    def pf(self) -> bool:
-        return self.cie_pf and self.fcd_pf and self.p_pf and self.pct_drop_pf
-
-
-class LightingStation3LightMeasurement(Schema):
-    _repr_fields = ['x', 'y', 'fcd', 'cct', 'duv', ]
-    result_row_id = LightingStation3ResultRow.id_fk()
-    result_rows = light_measurement_association_table.child
-    t = Column(DateTime, nullable=False)
-    x = Column(Float, nullable=False)
-    y = Column(Float, nullable=False)
-    fcd = Column(Float, nullable=False)
-    cct = Column(Float, nullable=False)
-    duv = Column(Float, nullable=False)
+        return {ch: getattr(self, f'dmx_ch{ch}') for ch in range(1, 11) if getattr(self, f'dmx_ch{ch}') != 0}
 
 
 register_association_table = Relationship.association(
     Schema, 'EEPROMConfig', 'registers', 'EEPROMRegister', 'configs'
 )
+
+
+@dataclass
+class Configuration:
+    config_id: int
+    name: str
+    is_initial: bool
+    registers: Dict[Tuple[int, int], int] = field(repr=False)
 
 
 class EEPROMConfig(Schema):
@@ -219,7 +213,7 @@ class EEPROMConfig(Schema):
     registers: Any = register_association_table.parent
 
     @classmethod
-    def get(cls, session: SessionType, name: str, is_initial: bool) -> Dict[Tuple[int, int], int]:
+    def get(cls, session: SessionType, name: str, is_initial: bool) -> Configuration:
         result = session.query(cls).filter(
             cls.name == name, cls.is_initial == is_initial, cls.rev == session.query(
                 func.max(AppConfigUpdate.id)
@@ -229,7 +223,11 @@ class EEPROMConfig(Schema):
             raise ValueError(
                 f'{name} <initial={is_initial}> deprecated or not present in the {cls.__name__} table'
             )
-        return {(reg.target, reg.index): reg.value for reg in result.registers}
+        return Configuration(
+            result.id, result.name, result.is_initial, {
+                (reg.target, reg.index): reg.value for reg in result.registers
+            }
+        )
 
 
 class EEPROMRegister(Schema):
@@ -294,53 +292,119 @@ class TestStep(Schema):
     # iterations = Rel.stage_to_iterations.parent
 
 
+firmware_association_table = Relationship.association(
+    Schema, 'FirmwareVersion', 'code', 'FirmwareCode', 'version'
+)
+
+
+@dataclass
+class Firmware:
+    version_id: int
+    name: str
+    version: int
+    code: List[bytes] = field(repr=False)
+
+
 class FirmwareVersion(Schema):
-    _repr_fields = ['pn', 'version', ]
-    fp_to_fields_re = re.compile(r'(?i)\\80-(\d+)_\D+(\d+)\.dta')
+    _repr_fields = ['name', 'version', ]
+    fp_to_fields_re = re.compile(r'(?i)(\d+)\.dta')
 
-    pn = Column(Integer, nullable=False)
+    rev = Column(Integer, nullable=False)
+    name = Column(String(128), nullable=False)
     version = Column(Integer, nullable=False)
-    code = Rel.version_to_code.parent
-
-    __table_args__ = (
-        UniqueConstraint('pn', 'version'),
-    )
+    code = firmware_association_table.parent
 
     @classmethod
-    def make_from(cls, fp: Path) -> 'FirmwareVersion':
-        pn, version = cls.fp_to_fields_re.findall(str(fp))[0]
-        return FirmwareVersion(pn=int(pn), version=int(version), code=FirmwareCode.get_from(fp))
+    def get(cls, session: SessionType, name: str) -> Firmware:
+        result = session.query(cls).filter(
+            cls.name == name, cls.rev == session.query(
+                func.max(AppConfigUpdate.id)
+            ).scalar_subquery()
+        ).one_or_none()
+        if not result:
+            raise ValueError(f'{name} deprecated or not present in the {cls.__name__} table')
+        return Firmware(result.id, result.name, result.version, result.code[0].in_chunks)
 
 
 class FirmwareCode(Schema):
     _repr_fields = ['hash', ]
     fw_id = FirmwareVersion.id_fk()
     code = Column(LargeBinary, nullable=False)
-    hashed = Column(String(32), default=make_hash_f, onupdate=make_hash_f, unique=True)
-    version = Rel.version_to_code.child
+    hashed = Column(String(32), nullable=False)
+    version = firmware_association_table.child
 
-    @classmethod
-    def get_from(cls, fp: Path) -> 'FirmwareCode':
-        with open(fp, 'rb') as dat:
-            return FirmwareCode(code=dat.read())
+    @property
+    def in_chunks(self) -> List[bytes]:
+        return list(map(bytes, funcy.chunks(271, map(int, self.code))))
 
 
 class EEPROMConfigIteration(Schema):
-    _repr_fields = ['dut', 'config', 'created_at', ]
-    dut_id = Device.id_fk()
-    station_id = Station.id_fk()
+    _repr_fields = ['config', 'success', 'created_at', ]
     config_id = EEPROMConfig.id_fk()
-    # dut = Rel.device_to_config_iterations.child
     config = Relationship.child_to_parent(EEPROMConfig)
+    success = Column(Boolean, default=False)
+
+
+class ConfirmUnitIdentityIteration(Schema):
+    _repr_fields = ['success', 'created_at', ]
+    success = Column(Boolean, default=False)
 
 
 class FirmwareIteration(Schema):
-    _repr_fields = ['dut', 'fw', 'created_at', ]
-    dut_id = Device.id_fk()
-    station_id = Station.id_fk()
+    _repr_fields = ['firmware', 'skipped', 'success', 'created_at', ]
     firmware_id = FirmwareVersion.id_fk()
-    # dut = Rel.device_to_firmware_iterations.child
-    fw = Relationship.child_to_parent(FirmwareVersion)
+    firmware = Relationship.child_to_parent(FirmwareVersion)
+    skipped = Column(Boolean, default=False)
+    success = Column(Boolean, default=False)
+
+
+class LightingStation3Iteration(Schema):
+    _repr_fields = ['config_iterations', 'firmware_iterations', 'params', 'results']
+    unit_identity_confirmation = ConfirmUnitIdentityIteration.fk_id()
+    firmware_iteration = FirmwareIteration.id_fk()
+    initial_config = EEPROMConfigIteration.id_fk()
+    final_config = EEPROMConfigIteration.id_fk()
+    result_rows = Rel.lighting_station3_iteration_results.parent
+    p_f = Column(Boolean, default=False)
+
+
+light_measurement_association_table = Relationship.association(
+    Schema, 'LightingStation3ResultRow', 'light_measurements',
+    'LightingStation3LightMeasurement', 'result_row'
+)
+
+
+class LightingStation3ResultRow(Schema):
+    _repr_fields = ['x', 'y', 'fcd', 'p', 'pct_drop', ]
+    param_row_id = LightingStation3ParamRow.id_fk()
+    param_row = Relationship.child_to_parent(LightingStation3ParamRow)
+    test_iteration_id = LightingStation3Iteration.id_fk()
+    test_iteration = Rel.lighting_station3_iteration_results.child
+    light_measurements = Rel.lighting_station3_result_row_to_light_measurements.parent
+    t = Column(DateTime, nullable=False)
+    x = Column(Float, nullable=False)
+    y = Column(Float, nullable=False)
+    fcd = Column(Float, nullable=False)
+    CCT = Column(Float, nullable=False)
+    duv = Column(Float, nullable=False)
+    p = Column(Float, nullable=False)
+    pct_drop = Column(Float, nullable=False)
+    cie_dist = Column(Float, nullable=False)
+    cie_pf = Column(Boolean, default=False)
+    fcd_pf = Column(Boolean, default=False)
+    p_pf = Column(Boolean, default=False)
+    pct_drop_pf = Column(Boolean, default=False)
+
+    def pf(self) -> bool:
+        return self.cie_pf and self.fcd_pf and self.p_pf and self.pct_drop_pf
+
+
+class LightingStation3LightMeasurement(Schema):
+    _repr_fields = ['te', 'fcd', ]
+    result_row_id = LightingStation3ResultRow.id_fk()
+    result_row = Rel.lighting_station3_result_row_to_light_measurements.child
+    fcd = Column(Float, nullable=False)
+    te = Column(Float, nullable=False)
 
 
 class LightingStation1ResultRow(Schema):

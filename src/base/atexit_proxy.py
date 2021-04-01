@@ -9,7 +9,7 @@ __all__ = [
     'unregister',
 ]
 
-_process = current_process()
+_process = current_process().name
 
 if _process == 'MainProcess':
     from atexit import register, unregister

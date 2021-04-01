@@ -1,4 +1,5 @@
 import json
+import subprocess
 from collections import defaultdict
 from dataclasses import dataclass
 from dataclasses import field
@@ -21,6 +22,10 @@ import yaml as yml
 from sqlalchemy import func
 from sqlalchemy import Table
 
+from instruments.wet._readers import DTAReader
+from model.db.helper import make_hash
+from model.db.schema import FirmwareCode
+from model.db.schema import FirmwareVersion
 from src.base.db.connection import SessionType
 from src.base.log import logger
 from src.model.db import connect
@@ -57,6 +62,10 @@ def _find_files(ext: str) -> Dict[str, _Path]:
     )))}
 
 
+class ConfigError(Exception):
+    pass
+
+
 _T = TypeVar('_T')
 
 
@@ -64,9 +73,8 @@ class ConfigUpdate:
     kwargs = dict(
         # echo_sql=True,
         # drop_tables=True,
-        # time_session=True,
     )
-    params_objects = (('lighting/station3/params.xlsx', LightingStation3Param, LightingStation3ParamRow),)
+    params_objects = ((r'lighting/station3/params.xlsx', LightingStation3Param, LightingStation3ParamRow),)
     new: int
     session: SessionType
     rev: int
@@ -80,18 +88,32 @@ class ConfigUpdate:
 
     def test(self) -> None:
         with self.session_manager() as session:
-            print(EEPROMConfig.get(session, '938 ArenaPar WRMA', False))
+            code = FirmwareVersion.get(session, r'lighting\firmware\80-01003_Lighting_Application_2932.dta')
+            print(code[0])
+            print(len(code))
+            data = DTAReader.read(
+                r"W:\Test Data Backup\test\versioned\lighting\firmware\80-01003_Lighting_Application_2932.dta"
+            )
+            print(data[0])
+            print(len(data))
 
-    def update(self) -> None:
+    def update(self, check_dirty: bool = True) -> None:
+        if check_dirty:
+            if subprocess.check_output("git diff --quiet || echo 'dirty'", shell=True).decode().strip() != '':
+                raise ConfigError('working tree must be clean to perform config update.')
+
         self.new = 0
         self.object_id_dict = defaultdict(set)
         with self.session_manager() as session:
             self.session = session
-            self.app_config_obj = self.session.make(AppConfigUpdate())
+            self.app_config_obj = self.session.make(AppConfigUpdate(commit=subprocess.run(
+                ['git', 'rev-parse', '--verify', 'HEAD'], capture_output=True, text=True
+            ).stdout))
             self.rev = self.app_config_obj.id
-            self.handle_yml()
+            self.handle_firmware()
             self.handle_eeprom_xlsx()
             list(starmap(self.handle_params_xlsx, self.params_objects))
+            self.handle_yml()
             self.app_config_obj.objects = json.dumps(
                 {k: list(v) for k, v in self.object_id_dict.items()}
             )
@@ -156,6 +178,30 @@ class ConfigUpdate:
 
             self.new += 1
             self.make_file_record(new, [obj])
+            self.add_to_app_update(obj)
+
+    def handle_firmware(self) -> None:
+        for new in self.make_roster('.dta'):
+            log.debug(f'checking -> {new.path_key}')
+
+            with open(new.filepath, 'rb') as dat:
+                code = dat.read()
+            hashed = make_hash(code)
+
+            obj = self.session.query(FirmwareCode).filter(
+                FirmwareCode.code == code,
+            ).one_or_none()
+            if obj is None:
+                obj = self.session.make(FirmwareCode(code=code, hashed=hashed))
+
+            obj = self.session.make(FirmwareVersion(
+                code=[obj], name=new.path_key, rev=self.rev,
+                version=int(FirmwareVersion.fp_to_fields_re.findall(str(new.filepath))[0])
+            ))
+
+            self.new += 1
+            self.make_file_record(new, [obj])
+            # noinspection PyTypeChecker
             self.add_to_app_update(obj)
 
     @staticmethod
@@ -253,4 +299,5 @@ class ConfigUpdate:
 if __name__ == '__main__':
     with logger:
         updater = ConfigUpdate()
-        updater.test()
+        updater.update(check_dirty=False)
+        # updater.test()

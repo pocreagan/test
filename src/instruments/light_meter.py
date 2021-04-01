@@ -1,22 +1,22 @@
 import ctypes
-import logging
 from ctypes import c_char_p
 from ctypes import c_int16
 from ctypes import c_int32
 from ctypes import c_int8
 from dataclasses import dataclass
 from dataclasses import fields
-from dataclasses import InitVar
 from functools import lru_cache
+from operator import attrgetter
 from pathlib import Path
+from statistics import mean
 from time import perf_counter
 from typing import Callable
 from typing import cast
 from typing import Dict
-from typing import Optional
+from typing import Iterable
 
-from src.base.actor import proxy
 from src.base.actor import configuration
+from src.base.actor import proxy
 from src.instruments.base.dll import DLLFunc
 from src.instruments.base.dll import load_dll
 from src.instruments.base.instrument import Instrument
@@ -45,12 +45,22 @@ class LightMeasurement:
     y: float
     fcd: float
     CCT: float
-    du: InitVar[float]
-    dv: InitVar[float]
-    duv: Optional[float] = None
+    duv: float
 
-    def __post_init__(self, du: float, dv: float) -> None:
-        self.duv = self._root_sum_squares(du, dv)
+    def __post_init__(self) -> None:
+        self.CCT = float(int(self.CCT))
+
+    # noinspection PyPep8Naming
+    @classmethod
+    def from_light_meter(cls, x: float, y: float, fcd: float, CCT: float,
+                         du: float, dv: float) -> 'LightMeasurement':
+        return cls(x, y, fcd, CCT, cls._root_sum_squares(du, dv))
+
+    @classmethod
+    def averaged_from(cls, measurements: Iterable['LightMeasurement']) -> 'LightMeasurement':
+        return LightMeasurement(
+            **{k.name: mean(map(attrgetter(k.name), measurements)) for k in fields(cls)}
+        )
 
     @staticmethod
     def _root_sum_squares(a: float, b: float) -> float:
@@ -191,7 +201,9 @@ class LightMeter(Instrument):
         try:
             self.proxy_check_cancelled()
             self.mk_Capture(_exp_t)
-            meas = LightMeasurement(**{k: self.get_data(v) for k, v in self.registers.items()})
+            meas = LightMeasurement.from_light_meter(
+                **{k: self.get_data(v) for k, v in self.registers.items()}
+            )
             self.info(meas)
             return meas
         except OSError as e:

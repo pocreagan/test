@@ -179,9 +179,9 @@ class FTDI:
 
     @baudrate.setter
     def baudrate(self, rate: int) -> None:
-        if not self._set_if_changed(self.interface.setBaudRate, 'baudrate', rate, rate):
-            self.break_length = (self._break_bytes / self.baudrate) * self._word_length
-            self.mab_length = (self._mab_bytes / self.baudrate) * self._word_length
+        self._set_if_changed(self.interface.setBaudRate, 'baudrate', rate, rate)
+        self.break_length = (self._break_bytes / self.baudrate) * self._word_length
+        self.mab_length = (self._mab_bytes / self.baudrate) * self._word_length
 
     @property
     def timeouts(self) -> Timeouts:
@@ -318,8 +318,9 @@ class FTDI:
     def send_break(self, duration: float) -> None:
         if duration:
             try:
-                with TimerContext(duration):
-                    self.break_condition = True
+                # with TimerContext(duration):
+                self.break_condition = True
+                self.delay_for(duration)
             finally:
                 self.break_condition = False
 
@@ -418,10 +419,10 @@ class BaudrateContext:
         return self
 
     def __enter__(self) -> 'BaudrateContext':
-        self.driver.instrument.debug(f'changed baudrate from {self.driver.baudrate} to {self.next}')
+        self.driver.instrument.info(f'changed baudrate from {self.driver.baudrate} to {self.next}')
         self.next, self.driver.baudrate = self.driver.baudrate, self.next
         return self
 
     def __exit__(self, *args):
-        self.driver.instrument.debug(f'changed baudrate from {self.driver.baudrate} to {self.next}')
+        self.driver.instrument.info(f'changed baudrate from {self.driver.baudrate} to {self.next}')
         self.driver.baudrate = self.next

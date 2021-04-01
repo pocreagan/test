@@ -7,7 +7,7 @@ should be imported from here but not used here
 
 from contextlib import contextmanager
 from time import perf_counter
-from typing import Callable
+from typing import Callable, Type, ContextManager
 from typing import TypeVar
 
 import sqlalchemy as sa
@@ -38,16 +38,11 @@ class SessionType(Session):
         raise Exception('must not explicitly invoke .commit()')
 
 
-class SessionManager(Protocol):
-    def __init__(self, expire_on_commit: bool = True) -> None: ...
-
-    def __enter__(self) -> SessionType: ...
-
+SessionManager = Callable[..., ContextManager[SessionType]]
 
 def connect(logger, schema: DeclarativeMeta, conn_string: str = '',
-            time_session: bool = False,
             echo_sql: bool = False,
-            drop_tables: bool = False, **kwargs) -> Callable[[], SessionManager]:
+            drop_tables: bool = False, **kwargs) -> SessionManager:
     """
     sets up the sqlalchemy connection and declares a transaction factory context manager
     """
@@ -76,15 +71,14 @@ def connect(logger, schema: DeclarativeMeta, conn_string: str = '',
     log.info(f'mapped {_connection} schema')
 
     @contextmanager
-    def session_manager_f(expire_on_commit: bool = True):
+    def session_manager_f(expire: bool = True) -> ContextManager[SessionType]:
         """
         provide a transactional scope around a series of operations
         """
         # ? https://docs.sqlalchemy.org/en/13/orm/session_basics.html
 
-        ti = perf_counter()
         session = session_constructor()
-        session.expire_on_commit = expire_on_commit
+        session.expire_on_commit = expire
 
         try:
             yield session
@@ -98,8 +92,5 @@ def connect(logger, schema: DeclarativeMeta, conn_string: str = '',
 
         finally:
             session.close()
-            if time_session:
-                te = round((perf_counter() - ti) * 1000, 1)
-                log.debug(f'$SESSION-TIME: {te}MS ({_connection})')
 
     return session_manager_f

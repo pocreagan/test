@@ -1,4 +1,3 @@
-import re
 from collections import Counter
 from collections import defaultdict
 from dataclasses import dataclass
@@ -28,9 +27,6 @@ from src.instruments.base.ftdi import Timeouts
 from src.instruments.base.ftdi import WordCharacteristics
 from src.instruments.base.instrument import Instrument
 from src.instruments.base.instrument import instrument_debug
-from src.instruments.wet import DTA_T
-from src.instruments.wet import FP_T
-from src.instruments.wet._readers import DTAReader
 
 __all__ = [
     'WETBadResponseError',
@@ -179,10 +175,10 @@ class EEPROMTarget(Enum):
 
 
 class WETCommandRegister:
-    SERIAL_NUMBER = EEPROMTarget.CONFIG, 59
+    DMX_ADDRESS = EEPROMTarget.CONFIG, 33
     MODEL_NUMBER = EEPROMTarget.CONFIG, 55
     FIRMWARE_VERSION = EEPROMTarget.CONFIG, 56
-    DMX_ADDRESS = EEPROMTarget.CONFIG, 33
+    SERIAL_NUMBER = EEPROMTarget.CONFIG, 59
 
 
 class WETCommandDynamicCommand:
@@ -531,11 +527,13 @@ class RS485(Instrument):
 
     @proxy.exposed
     @report_result
-    def dta_is_programmed_correctly(self, fp: FP_T):
-        version = int(re.findall(r'(?i)(\d+)\.dta$', str(fp))[0])
-        if self.wet_is_communicating():
+    def dta_is_programmed_correctly(self, version: int):
+        try:
+            _ = self.wet_serial_number()
+        except (WETNoResponseError, WETBadResponseError):
+            return False
+        else:
             return self.wet_firmware_version() == version
-        return False
 
     @proxy.exposed
     def send_pixie2_command(self, ch_on: int) -> None:
@@ -553,24 +551,20 @@ class RS485(Instrument):
         return self.dta_boot_reset()
 
     @proxy.exposed
-    def dta_program_firmware(self, fp: FP_T, consumer: Callable[..., None] = None) -> None:
+    def dta_program_firmware(self, packets: List[bytes], version,
+                             consumer: Callable[..., None] = None) -> None:
         consumer = consumer if callable(consumer) else self.info
-        data: DTA_T = DTAReader.read(fp)
-        version = int(re.findall(r'(?i)(\d+)\.dta$', str(fp))[0])
 
-        self.info(f'programming FW v{version} from {fp}')
-
-        consumer(FirmwareSetup(version, len(data)))
+        self.info(f'programming FW version={version}')
+        consumer(FirmwareSetup(version, len(packets)))
 
         with self.ser.baud(9600):
-            for i, chunk in enumerate(data):
-                consumer(FirmwareIncrement(i))
+            for i, chunk in enumerate(packets):
                 self.ser.send(chunk)
+                consumer(FirmwareIncrement(i))
 
-        self.dta_boot_reset()
-        self.__wait_for_reset()
-
-        self.info('programming FW complete')
+        self.ser.interface.setBaudRate(250000)
+        self.info(f'programming FW complete')
 
     def __wet_unit_identity(self, f, sn: int, mn: int):
         _ = self
@@ -612,17 +606,21 @@ class RS485(Instrument):
 
         consumer(ConfigSetup(len(config) * 2))
         already_good = set()
-        for (target, index), payload in config.items():
-            if read_first and self.eeprom_confirm(target, index, payload):
-                already_good.add((target, index))
-            else:
-                self.eeprom_write(target, index, payload)
-            consumer(ConfigRegister(target, index, payload))
+        try:
+            for (target, index), payload in config.items():
+                if read_first and self.eeprom_confirm(target, index, payload):
+                    already_good.add((target, index))
+                else:
+                    self.eeprom_write(target, index, payload)
+                consumer(ConfigRegister(target, index, payload))
 
-        for (target, index), payload in config.items():
-            if (target, index) not in already_good:
-                if not self.eeprom_confirm(target, index, payload):
-                    raise RS485Error(f'failed to confirm {target} {index} {payload}')
-            consumer(ConfigRegister(target, index, payload))
+            for (target, index), payload in config.items():
+                if (target, index) not in already_good:
+                    if not self.eeprom_confirm(target, index, payload):
+                        raise RS485Error(f'failed to confirm {target} {index} {payload}')
+                consumer(ConfigRegister(target, index, payload))
+
+        except (WETNoResponseError, WETBadResponseError) as e:
+            raise RS485Error('comm failure in configuration') from e
 
         self.info('configuration complete')

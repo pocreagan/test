@@ -145,3 +145,11 @@ class ConfigReader(Reader):
             return _w, _data
         else:
             return _data, _data
+
+
+if __name__ == '__main__':
+    data = DTAReader.read(
+        r"W:\Test Data Backup\test\versioned\lighting\firmware\80-01003_Lighting_Application_2932.dta"
+    )
+    print(data[0])
+    print(len(data))
