@@ -282,7 +282,6 @@ class FTDI:
             self.settings = settings
             self.next_tx = time() + self.instrument.TX_WAIT_S
             self.baud = BaudrateContext(self)
-            self.packet = PacketCharacteristics(0, 0, 0)
 
     def open(self, settings: Settings) -> None:
         # noinspection PyBroadException
