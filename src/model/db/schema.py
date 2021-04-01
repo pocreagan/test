@@ -2,6 +2,7 @@
 declarative models should inherit from (meta.Base, meta.TableMixin)
 default factories should be declared in helper.py
 """
+import datetime
 import json
 import re
 import traceback
@@ -48,6 +49,7 @@ __all__ = [
     'LightingStation3ParamRow',
     'LightingStation3LightMeasurement',
     'LightingStation3ResultRow',
+    'LightingStation3LightMeterCalibration',
     'PartNumber',
     'Device',
     'Station',
@@ -88,6 +90,16 @@ class ConfigFile(Schema):
     fp = Column(String(256), nullable=False)
     last_modified = Column(DateTime, nullable=False)
     children = Column(Text)
+
+
+class LightingStation3LightMeterCalibration(Schema):
+    _repr_fields = ['created_at']
+
+    @classmethod
+    def is_up_to_date(cls, session: SessionType, interval_hours: int) -> bool:
+        return session.query(cls).filter(
+            cls.created_at > (datetime.datetime.now() - datetime.timedelta(hours=interval_hours))
+        ).first() is not None
 
 
 class YamlFile(Schema):

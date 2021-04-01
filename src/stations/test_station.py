@@ -1,12 +1,11 @@
+import dataclasses
 from dataclasses import dataclass
-from typing import Callable
+from typing import Callable, List, Dict, Any
 from typing import Generic
-from typing import Literal
+from typing_extensions import Literal
 from typing import Optional
 from typing import Type
 from typing import TypeVar
-
-from sqlalchemy.orm import Session
 
 from src.base import register
 from src.base.db.connection import SessionType
@@ -113,23 +112,24 @@ class TestStep(Generic[_STEP_MODEL_T]):
             self.session.flush()
 
 
-class TestStation(register.Mixin, Logged, instrument.InstrumentHandler):
+class TestStation(instrument.InstrumentHandler, Logged):
     _iteration_model_cla: Type[TestIterationProtocol]
 
     unit: DUTIdentityModel
     model: Type
     session: SessionType
     iteration: TestIterationProtocol
+    model_configs: Dict[int, Any]
 
-    def __init__(self, station: 'TestStation', session_manager: Type[SessionManager],
+    def __init__(self, session_manager: Type[SessionManager],
                  view_emit: Callable = None) -> None:
         self._emit = view_emit if callable(view_emit) else self.info
         self.session_manager = session_manager
-        self.station = station
         with self.session_manager() as session:
+            YamlFile.update_object(session, self)
             [YamlFile.update_object(session, inst) for inst in self.instruments.values()]
 
-    def fail_test(self, msg) -> Literal[False]:
+    def test_failure(self, msg) -> Literal[False]:
         self.emit(msg)
         return False
 
@@ -142,10 +142,10 @@ class TestStation(register.Mixin, Logged, instrument.InstrumentHandler):
 
     def run(self, unit: DUTIdentityModel) -> None:
         self.unit = unit
-        self.model = self.get_test_model(unit)
 
         try:
             with self.session_manager() as session:
+                self.model = self.get_test_model(session, self.model_configs, unit)
                 self.session = session
                 self.iteration = self.session.make(self.get_test_iteration())
                 self.perform_test()
@@ -165,7 +165,10 @@ class TestStation(register.Mixin, Logged, instrument.InstrumentHandler):
         """
         raise NotImplementedError
 
-    def get_test_model(self, unit: DUTIdentityModel):
+    @classmethod
+    def get_test_model(cls, session: SessionType,
+                       model_configs: Dict[int, Any],
+                       unit: DUTIdentityModel):
         """
         build test model from unit identity from database config and params rows
         """

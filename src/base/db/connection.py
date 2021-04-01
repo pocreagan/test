@@ -7,7 +7,7 @@ should be imported from here but not used here
 
 from contextlib import contextmanager
 from time import perf_counter
-from typing import Callable
+from typing import Callable, Type
 from typing import TypeVar
 
 import sqlalchemy as sa
@@ -45,9 +45,8 @@ class SessionManager(Protocol):
 
 
 def connect(logger, schema: DeclarativeMeta, conn_string: str = '',
-            time_session: bool = False,
             echo_sql: bool = False,
-            drop_tables: bool = False, **kwargs) -> Callable[[], SessionManager]:
+            drop_tables: bool = False, **kwargs) -> Callable[[], Type[SessionManager]]:
     """
     sets up the sqlalchemy connection and declares a transaction factory context manager
     """
@@ -82,7 +81,6 @@ def connect(logger, schema: DeclarativeMeta, conn_string: str = '',
         """
         # ? https://docs.sqlalchemy.org/en/13/orm/session_basics.html
 
-        ti = perf_counter()
         session = session_constructor()
         session.expire_on_commit = expire_on_commit
 
@@ -98,8 +96,5 @@ def connect(logger, schema: DeclarativeMeta, conn_string: str = '',
 
         finally:
             session.close()
-            if time_session:
-                te = round((perf_counter() - ti) * 1000, 1)
-                log.debug(f'$SESSION-TIME: {te}MS ({_connection})')
 
     return session_manager_f

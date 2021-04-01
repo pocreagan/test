@@ -1,61 +1,103 @@
-import logging
 from dataclasses import dataclass
 from dataclasses import field
 from datetime import datetime
 from time import perf_counter
-from typing import Dict
+from typing import Dict, Any
 from typing import List
 from typing import Optional
 from typing import Tuple
 from typing import Type
 
+from base.actor import configuration
+from base.db.connection import SessionType
+from model.db.schema import TestIterationProtocol, LightingStation3LightMeterCalibration, EEPROMConfig, YamlFile
 from src.base.general import test_nom_tol
 from src.base.log import logger
-from src.stations.test_station import TestStation
 from src.instruments.base.instrument import instruments_joined
 from src.instruments.base.instrument import instruments_spawned
 from src.instruments.dc_power_supplies import DCLevel
+from src.instruments.dc_power_supplies import connection_states
 from src.instruments.dc_power_supplies.bk_ps import BKPowerSupply
-from src.instruments.dc_power_supplies.connection_states import ConnectionStateCalcType
+from src.instruments.dc_power_supplies.connection_states import ConnectionStateCalcType, LightLineV1ConnectionState
 from src.instruments.light_meter import LightMeter
 from src.instruments.wet.rs485 import RS485
 from src.instruments.wet.rs485 import RS485Error
+from src.model.db import connect
 from src.model.db.helper import dataclass_to_model
 from src.model.db.schema import LightingStation3LightMeasurement
 from src.model.db.schema import LightingStation3Param
 from src.model.db.schema import LightingStation3ParamRow
 from src.model.db.schema import LightingStation3ResultRow
+from src.stations.test_station import TestStation
+from stations.test_station import DUTIdentityModel
 
 log = logger(__name__)
 
 
-# TODO: make station .yml for string check and test it with thrown errors
-# TODO: optional view injection for updates with unified interface
-# TODO: merge test_framework -> instruments
-# TODO: config step model with one to one relationships to DUT, iteration, station, config
-
-
 @dataclass
 class Station3TestModel:
-    connection_calc: Type[ConnectionStateCalcType]
-    firmware: Optional[str]
-    thermal_with_firmware: bool
-    initial_config: Optional[str]
-    final_config: Optional[str]
-    string_params: List[LightingStation3Param] = field(default_factory=list)
+    connection_calc: str
+    param_sheet: str
+    chart: str
+    firmware: Optional[str] = None
+    unit_identity: Optional[bool] = None
+    program_with_thermal: Optional[bool] = None
+    initial_config: Optional[str] = None
+    final_config: Optional[str] = None
     firmware_force_overwrite: bool = False
+    connection_calc_type: Optional[Type[ConnectionStateCalcType]] = None
+    initial_config_registers: Optional[Dict[Tuple[int, int], int]] = None
+    final_config_registers: Optional[Dict[Tuple[int, int], int]] = None
+    string_params_rows: List[LightingStation3Param] = field(default_factory=list)
 
 
 class Station3(TestStation):
+    model: Station3TestModel
+
+    def get_test_iteration(self) -> TestIterationProtocol:
+        raise NotImplementedError
+
+    @classmethod
+    def get_test_model(cls, session: SessionType, model_configs: Dict[str, Any], unit: DUTIdentityModel):
+        config_dict: Dict[str, Any] = model_configs.get(str(unit.mn)).copy()
+        if 'options' in config_dict:
+            model_options = config_dict.pop('options')
+            config_dict.update(model_options.get('default', {}))
+            if unit.option:
+                config_dict.update(model_options.get(unit.option, {}))
+        model = Station3TestModel(**config_dict)
+        model.string_params_rows = LightingStation3Param.get(session, model.param_sheet)
+        model.connection_calc_type = getattr(connection_states, model.connection_calc)
+        for initial, cfg_name in enumerate(['final_config', 'initial_config']):
+            cfg_sheet_name = getattr(model, cfg_name)
+            if cfg_sheet_name is not None:
+                setattr(model, f'{cfg_name}_registers', EEPROMConfig.get(
+                    session, cfg_sheet_name, is_initial=bool(initial)
+                ))
+        return model
+
     ps = BKPowerSupply()
     lm = LightMeter()
     ftdi = RS485()
 
+    _config = configuration.from_yml(r'lighting\station3\station3.yml')
+    light_meter_calibration_interval_hours = _config.field(int)
+    power_supply_log_level = _config.field(int, transform=configuration.log_level)
+    light_meter_log_level = _config.field(int, transform=configuration.log_level)
+    ftdi_log_level = _config.field(int, transform=configuration.log_level)
+    model_configs = _config.field(dict)
+
     @instruments_joined
     def instruments_setup(self) -> None:
-        self.ps.log_level(logging.INFO)
-        self.ftdi.log_level(logging.INFO)
-        self.lm.calibrate()
+        self.ps.log_level(self.power_supply_log_level)
+        self.ftdi.log_level(self.ftdi_log_level)
+        self.lm.log_level(self.light_meter_log_level)
+        with self.session_manager() as session:
+            if not LightingStation3LightMeterCalibration.is_up_to_date(
+                    session, self.light_meter_calibration_interval_hours
+            ):
+                self.lm.calibrate()
+                session.make(LightingStation3LightMeterCalibration())
 
     @instruments_spawned
     def string_test(self, params: LightingStation3ParamRow,
@@ -101,7 +143,7 @@ class Station3(TestStation):
 
         percent_drop = meas.percent_drop_from(light_measurements[0])
 
-        return self.station.emit(
+        return self.emit(
             LightingStation3ResultRow(
                 x=meas.x, y=meas.y, fcd=meas.fcd, cct=meas.cct, duv=meas.duv, p=power_meas,
                 pct_drop=percent_drop, cie_dist=meas.distance_from(params.cie_dist),
@@ -125,11 +167,11 @@ class Station3(TestStation):
             return True
 
     def perform_test(self) -> bool:
-        remaining_rows = self.model.string_params.copy()
+        remaining_rows = self.model.string_params_rows.copy()
         result_rows: List[LightingStation3ResultRow] = []
 
         # check connection
-        if not bool(self.ps.calculate_connection_state(self.model.connection_calc)):
+        if not bool(self.ps.calculate_connection_state(self.model.connection_calc_type)):
             return self.test_failure('failed connection state check')
 
         # program and thermal as indicated
@@ -147,9 +189,9 @@ class Station3(TestStation):
                     return self.test_failure('failed to confirm FW erasure')
 
                 # noinspection PyNoneFunctionAssignment
-                programming_promise = self.ftdi.dta_program_firmware(self.model.firmware, self.station.emit)
+                programming_promise = self.ftdi.dta_program_firmware(self.model.firmware, self.emit)
 
-            if self.model.thermal_with_firmware:
+            if self.model.program_with_thermal:
                 thermal_row, *remaining_rows = remaining_rows
                 result_rows.append(self.string_test(thermal_row, False))
 
@@ -168,7 +210,7 @@ class Station3(TestStation):
 
         # initial config
         if self.model.initial_config is not None:
-            if not self.configure(self.model.initial_config, True):
+            if not self.configure(self.model.initial_config_registers, True):
                 return self.test_failure('failed to confirm EEPROM initial config')
 
         # non-full on string check steps
@@ -176,12 +218,26 @@ class Station3(TestStation):
 
         # final config
         if self.model.final_config is not None:
-            if not self.configure(self.model.final_config, False):
+            if not self.configure(self.model.final_config_registers, False):
                 return self.test_failure('failed to confirm EEPROM final config')
 
         return True
 
+    def debug_test(self) -> None:
+        self.ps.calculate_connection_state(LightLineV1ConnectionState)
+        self.info('at_least_bootloader', self.ftdi.wet_at_least_bootloader())
+
 
 if __name__ == '__main__':
     with logger:
-        pass
+        unit = DUTIdentityModel(9000000, 918, 'b')
+        session_manager = connect(echo_sql=True)
+        with session_manager(expire_on_commit=False) as session:
+            model = Station3.get_test_model(
+                session, YamlFile.get(session, r'lighting\station3\station3.yml').get('model_configs'), unit
+            )
+        print(model)
+
+        # test = Station3(connect(echo_sql=True))
+        # test.instruments_setup()
+        # test.debug_test()

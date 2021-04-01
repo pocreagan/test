@@ -1,4 +1,5 @@
 import json
+import subprocess
 from collections import defaultdict
 from dataclasses import dataclass
 from dataclasses import field
@@ -63,10 +64,9 @@ _T = TypeVar('_T')
 class ConfigUpdate:
     kwargs = dict(
         # echo_sql=True,
-        # drop_tables=True,
-        # time_session=True,
+        drop_tables=True,
     )
-    params_objects = (('lighting/station3/params.xlsx', LightingStation3Param, LightingStation3ParamRow),)
+    params_objects = ((r'lighting/station3/params.xlsx', LightingStation3Param, LightingStation3ParamRow),)
     new: int
     session: SessionType
     rev: int
@@ -83,6 +83,8 @@ class ConfigUpdate:
             print(EEPROMConfig.get(session, '938 ArenaPar WRMA', False))
 
     def update(self) -> None:
+        git_hash = subprocess.run(['git', 'rev-parse', '--verify', 'HEAD'], capture_output=True, text=True)
+
         self.new = 0
         self.object_id_dict = defaultdict(set)
         with self.session_manager() as session:
@@ -253,4 +255,5 @@ class ConfigUpdate:
 if __name__ == '__main__':
     with logger:
         updater = ConfigUpdate()
+        updater.update()
         updater.test()

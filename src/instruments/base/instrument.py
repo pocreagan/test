@@ -225,8 +225,8 @@ class StringInstrument(Instrument):
         self.debug(f'transmit -> "{packet}"')
 
 
-instruments_joined = with_method_done('proxy_join')
-instruments_spawned = with_method_done('proxy_spawn')
+instruments_joined = with_method_done('instruments_join')
+instruments_spawned = with_method_done('instruments_spawn')
 
 
 class InstrumentHandler(register.Mixin, Logged):
@@ -246,7 +246,7 @@ class InstrumentHandler(register.Mixin, Logged):
         """
         raise NotImplementedError
 
-    @register.before('instrument_setup')
+    @register.before('instruments_setup')
     @instruments_joined
     def _instruments_setup(self) -> None:
         self.__instrument('instrument_setup')

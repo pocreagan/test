@@ -1,3 +1,4 @@
+import logging
 import os
 from functools import lru_cache
 from operator import attrgetter
@@ -33,6 +34,10 @@ _cached_yml = False
 _config_file_root = Path(r'\\wet-pdm\Common\Test Data Backup\test\versioned')
 
 
+def log_level(level: str) -> int:
+    return getattr(logging, level.upper())
+
+
 class _ConfigField(Generic[_T]):
     name: str
 
@@ -52,13 +57,13 @@ class _ConfigField(Generic[_T]):
         raise NotImplementedError
 
     def _check_and_transform(self, k: str, v):
+        if callable(self.transform):
+            v = self.transform(v)
         # noinspection PyTypeHints
         if self._type and not isinstance(v, self._type):
             raise TypeError(f'configured field "{k}" must be one of {self._type}')
         if callable(self.guard) and not self.guard(v):
             raise ValueError(f'configured field "{k}" failed provided guard')
-        if callable(self.transform):
-            v = self.transform(v)
         return v
 
     def narrow_lookup(self, config: _T, header) -> _T:
@@ -139,7 +144,7 @@ class _ConfigFrom:
         self._fields: List[_ConfigField] = []
 
     def field(self, _t: Type[_T], key: str = None, default: _T = None,
-              guard: Callable[[_T], bool] = None, transform: Callable[[_T], _T] = None) -> _T:
+              guard: Callable[[_T], bool] = None, transform: Callable = None) -> _T:
         default = _no_default_sentinel if default is None else default  # type: ignore
         # noinspection PyTypeChecker
         field = self._field_type(_t, self.header, key=key,  # type: ignore
