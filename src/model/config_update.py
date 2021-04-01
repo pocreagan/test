@@ -100,7 +100,7 @@ class ConfigUpdate:
         self.object_id_dict = defaultdict(set)
         with self.session_manager() as session:
             self.session = session
-            self.app_config_obj = self.session.make(AppConfigUpdate(commit=git_hash))
+            self.app_config_obj = self.session.make(AppConfigUpdate(commit=git_hash.stdout))
             self.rev = self.app_config_obj.id
             self.handle_yml()
             self.handle_eeprom_xlsx()
