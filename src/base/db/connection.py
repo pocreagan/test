@@ -7,7 +7,7 @@ should be imported from here but not used here
 
 from contextlib import contextmanager
 from time import perf_counter
-from typing import Callable, Type
+from typing import Callable, Type, ContextManager
 from typing import TypeVar
 
 import sqlalchemy as sa
@@ -38,15 +38,11 @@ class SessionType(Session):
         raise Exception('must not explicitly invoke .commit()')
 
 
-class SessionManager(Protocol):
-    def __init__(self, expire: bool = True) -> None: ...
-
-    def __enter__(self) -> SessionType: ...
-
+SessionManager = Callable[..., ContextManager[SessionType]]
 
 def connect(logger, schema: DeclarativeMeta, conn_string: str = '',
             echo_sql: bool = False,
-            drop_tables: bool = False, **kwargs) -> Callable[[], Type[SessionManager]]:
+            drop_tables: bool = False, **kwargs) -> SessionManager:
     """
     sets up the sqlalchemy connection and declares a transaction factory context manager
     """
@@ -75,7 +71,7 @@ def connect(logger, schema: DeclarativeMeta, conn_string: str = '',
     log.info(f'mapped {_connection} schema')
 
     @contextmanager
-    def session_manager_f(expire: bool = True):
+    def session_manager_f(expire: bool = True) -> ContextManager[SessionType]:
         """
         provide a transactional scope around a series of operations
         """

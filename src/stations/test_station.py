@@ -1,15 +1,14 @@
-import dataclasses
 from dataclasses import dataclass
-from typing import Callable, List, Dict, Any
+from typing import Callable, Dict, Any
 from typing import Generic
-from typing_extensions import Literal
 from typing import Optional
 from typing import Type
 from typing import TypeVar
 
-from src.base import register
-from src.base.db.connection import SessionType
+from typing_extensions import Literal
+
 from src.base.db.connection import SessionManager
+from src.base.db.connection import SessionType
 from src.base.decorators import configure_class
 from src.base.log.mixin import Logged
 from src.instruments.base import instrument
@@ -115,14 +114,14 @@ class TestStep(Generic[_STEP_MODEL_T]):
 class TestStation(instrument.InstrumentHandler, Logged):
     _iteration_model_cla: Type[TestIterationProtocol]
 
-    session_manager: Type[SessionManager]
+    session_manager: SessionManager
     unit: DUTIdentityModel
     model: Type
     session: SessionType
     iteration: TestIterationProtocol
     config: Dict[str, Any]
 
-    def __init__(self, session_manager: Type[SessionManager],
+    def __init__(self, session_manager: SessionManager,
                  view_emit: Callable = None) -> None:
         self._emit = view_emit if callable(view_emit) else self.info
         self.session_manager = session_manager
@@ -150,7 +149,7 @@ class TestStation(instrument.InstrumentHandler, Logged):
             with self.session_manager() as session:
                 self.session = session
                 self.iteration = self.session.make(self.get_test_iteration())
-                self.perform_test()
+                self.perform_test(unit)
 
         except Exception as e:
             raise StationFailure(str(e)) from e
@@ -161,7 +160,7 @@ class TestStation(instrument.InstrumentHandler, Logged):
         """
         raise NotImplementedError
 
-    def perform_test(self) -> None:
+    def perform_test(self, unit: DUTIdentityModel) -> None:
         """
         once DUT and test model have been set, run test steps
         """

@@ -159,9 +159,7 @@ class BKPowerSupply(VISA, _DCPowerSupply):
 
     @proxy.exposed
     def ramp_up(self):
-        self.write_settings(DCLevel(10, .5), True)
-        for step in self.RAMP_STEPS:
-            self.write_settings(step)
+        [self.write_settings(step, output_state=True) for step in self.RAMP_STEPS]
 
     @proxy.exposed
     def calculate_connection_state(self, calc):
@@ -172,7 +170,7 @@ class BKPowerSupply(VISA, _DCPowerSupply):
         return _DCPowerSupply.off(self)
 
     def _instrument_debug(self) -> None:
-        self.log_level(logging.INFO)
+        self.log_level(logging.DEBUG)
         self.calculate_connection_state(LightLineV1ConnectionState)
         self.ramp_up()
         self.measure(fresh=True)

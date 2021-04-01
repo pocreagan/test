@@ -145,7 +145,7 @@ class LightingStation3Param(Schema):
 
 
 class LightingStation3ParamRow(Schema):
-    _repr_fields = ['x_nom', 'y_nom', 'color_dist_max', 'fcd_nom',
+    _repr_fields = ['dmx_control_dict', 'x_nom', 'y_nom', 'color_dist_max', 'fcd_nom',
                     'fcd_tol', 'p_nom', 'p_tol', 'pct_drop_max']
     param_id = LightingStation3Param.id_fk()
     params = lighting_station3_rows_association_table.child
@@ -176,7 +176,7 @@ class LightingStation3ParamRow(Schema):
 
     @property
     def dmx_control_dict(self) -> Dict[int, float]:
-        return {ch: getattr(self, f'dmx_ch{ch}') for ch in range(1, 11)}
+        return {ch: getattr(self, f'dmx_ch{ch}') for ch in range(1, 11) if getattr(self, f'dmx_ch{ch}') != 0}
 
 
 light_measurement_association_table = Relationship.association(
@@ -194,7 +194,7 @@ class LightingStation3ResultRow(Schema):
     x = Column(Float, nullable=False)
     y = Column(Float, nullable=False)
     fcd = Column(Float, nullable=False)
-    cct = Column(Float, nullable=False)
+    CCT = Column(Float, nullable=False)
     duv = Column(Float, nullable=False)
     p = Column(Float, nullable=False)
     pct_drop = Column(Float, nullable=False)
@@ -216,7 +216,7 @@ class LightingStation3LightMeasurement(Schema):
     x = Column(Float, nullable=False)
     y = Column(Float, nullable=False)
     fcd = Column(Float, nullable=False)
-    cct = Column(Float, nullable=False)
+    CCT = Column(Float, nullable=False)
     duv = Column(Float, nullable=False)
 
 

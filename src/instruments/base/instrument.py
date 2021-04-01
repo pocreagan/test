@@ -1,3 +1,4 @@
+from functools import wraps
 from inspect import currentframe
 from itertools import count
 from time import sleep
@@ -7,13 +8,12 @@ from typing import Optional
 from typing import Type
 from typing import TypeVar
 
-from src.base.actor.configuration import update_configs_on_object
 # noinspection SpellCheckingInspection
 from src.base import atexit_proxy as atexit
 from src.base import register
 from src.base.actor import proxy
+from src.base.actor.configuration import update_configs_on_object
 from src.base.actor.proxy import CancelledError
-from src.base.decorators import with_method_done
 from src.base.general import setdefault_attr_from_factory
 from src.base.log import logger
 from src.base.log.mixin import Logged
@@ -225,6 +225,24 @@ class StringInstrument(Instrument):
         self.debug(f'transmit -> "{packet}"')
 
 
+_TC = TypeVar('_TC')
+
+
+def with_method_done(method_name: str):
+    def outer(f: _TC) -> _TC:
+        @wraps(f)
+        def inner(self, *args, **kwargs):
+            getattr(self, method_name)()
+            try:
+                return f(self, *args, **kwargs)
+            finally:
+                self.instruments_return_to_last_state()
+
+        return inner  # type: ignore
+
+    return outer
+
+
 instruments_joined = with_method_done('instruments_join')
 instruments_spawned = with_method_done('instruments_spawn')
 
@@ -232,6 +250,8 @@ instruments_spawned = with_method_done('instruments_spawn')
 class InstrumentHandler(register.Mixin, Logged):
     @register.before('__init__')
     def _build_instrument_list(self) -> None:
+        self.last_spawn_state = False
+        self.instruments_spawned = False
         self.instruments = getattr(self, _test_instruments_key, {})
 
     def __instrument(self, method_name: str) -> None:
@@ -239,6 +259,13 @@ class InstrumentHandler(register.Mixin, Logged):
 
     def __proxy(self, method_name: str) -> None:
         [setattr(self, k, getattr(v, method_name)()) for k, v in self.instruments.items()]
+        self.instruments_spawned, self.last_spawn_state = 'spawn' in method_name, self.instruments_spawned
+
+    def instruments_return_to_last_state(self) -> None:
+        if self.last_spawn_state:
+            self.instruments_spawn()
+        else:
+            self.instruments_join()
 
     def instruments_setup(self) -> None:
         """
