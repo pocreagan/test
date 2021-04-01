@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from itertools import chain
 from typing import Callable, Dict, Any
 from typing import Generic
 from typing import Optional
@@ -7,6 +8,7 @@ from typing import TypeVar
 
 from typing_extensions import Literal
 
+from model.db.schema import AppConfigUpdate
 from src.base.db.connection import SessionManager
 from src.base.db.connection import SessionType
 from src.base.decorators import configure_class
@@ -120,14 +122,15 @@ class TestStation(instrument.InstrumentHandler, Logged):
     session: SessionType
     iteration: TestIterationProtocol
     config: Dict[str, Any]
+    config_rev: int
 
     def __init__(self, session_manager: SessionManager,
                  view_emit: Callable = None) -> None:
         self._emit = view_emit if callable(view_emit) else self.info
         self.session_manager = session_manager
         with self.session_manager() as session:
-            YamlFile.update_object(session, self)
-            [YamlFile.update_object(session, inst) for inst in self.instruments.values()]
+            [YamlFile.update_object(session, inst) for inst in chain([self], self.instruments.values())]
+            self.config_rev = AppConfigUpdate.get(session).id
         # noinspection PyTypeChecker
         self.model = self.build_test_model()
 

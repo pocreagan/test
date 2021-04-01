@@ -563,7 +563,7 @@ class RS485(Instrument):
                 self.ser.send(chunk)
                 consumer(FirmwareIncrement(i))
 
-        self.ser.interface.setBaudRate(250000)
+        self.__wait_for_reset()
         self.info(f'programming FW complete')
 
     def __wet_unit_identity(self, f, sn: int, mn: int):

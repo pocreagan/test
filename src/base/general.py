@@ -1,9 +1,12 @@
 import functools
+import os
 import random
 import time
 from enum import Enum
+from pathlib import Path
 from time import perf_counter
 from time import sleep
+from typing import Union
 from typing import Any
 from typing import Callable
 from typing import Dict
@@ -31,9 +34,23 @@ __all__ = [
     'test_nom_tol',
     'dict_from',
     'set_from',
+    'WorkingDirectory',
 ]
 
+
 _T = TypeVar('_T')
+
+
+class WorkingDirectory:
+    def __init__(self, dir_: Union[Path, str]) -> None:
+        self._dir = dir_
+
+    def __enter__(self) -> None:
+        self._prev = os.getcwd()
+        os.chdir(self._dir)
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        os.chdir(self._prev)
 
 
 def dict_from(obj, keys: Iterable[str]) -> Dict[str, Any]:

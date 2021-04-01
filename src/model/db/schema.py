@@ -99,6 +99,12 @@ class AppConfigUpdate(Schema):
     commit = Column(String(40), nullable=False)
     objects = Column(Text)
 
+    @classmethod
+    def get(cls, session: SessionType) -> 'AppConfigUpdate':
+        return session.query(cls).filter(
+            cls.rev == session.query(func.max(AppConfigUpdate.id)).scalar_subquery()
+        )
+
 
 class ConfigFile(Schema):
     _repr_fields = ['fp', 'last_modified']
@@ -360,7 +366,7 @@ class FirmwareIteration(Schema):
 
 class LightingStation3Iteration(Schema):
     _repr_fields = ['config_iterations', 'firmware_iterations', 'params', 'results']
-    unit_identity_confirmation = ConfirmUnitIdentityIteration.fk_id()
+    unit_identity_confirmation = ConfirmUnitIdentityIteration.id_fk()
     firmware_iteration = FirmwareIteration.id_fk()
     initial_config = EEPROMConfigIteration.id_fk()
     final_config = EEPROMConfigIteration.id_fk()

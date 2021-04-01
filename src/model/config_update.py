@@ -1,4 +1,5 @@
 import json
+import os
 import subprocess
 from collections import defaultdict
 from dataclasses import dataclass
@@ -22,7 +23,7 @@ import yaml as yml
 from sqlalchemy import func
 from sqlalchemy import Table
 
-from instruments.wet._readers import DTAReader
+from base.general import WorkingDirectory
 from model.db.helper import make_hash
 from model.db.schema import FirmwareCode
 from model.db.schema import FirmwareVersion
@@ -88,27 +89,23 @@ class ConfigUpdate:
 
     def test(self) -> None:
         with self.session_manager() as session:
-            code = FirmwareVersion.get(session, r'lighting\firmware\80-01003_Lighting_Application_2932.dta')
-            print(code[0])
-            print(len(code))
-            data = DTAReader.read(
-                r"W:\Test Data Backup\test\versioned\lighting\firmware\80-01003_Lighting_Application_2932.dta"
-            )
-            print(data[0])
-            print(len(data))
+            pass
 
     def update(self, check_dirty: bool = True) -> None:
-        if check_dirty:
-            if subprocess.check_output("git diff --quiet || echo 'dirty'", shell=True).decode().strip() != '':
+        with WorkingDirectory(_anchor.parent):
+            if check_dirty and subprocess.check_output(
+                    "git diff --quiet || echo 'dirty'", shell=True
+            ).decode().strip() != '':
                 raise ConfigError('working tree must be clean to perform config update.')
+            commit_hash = subprocess.run(
+                ['git', 'rev-parse', '--verify', 'HEAD'], capture_output=True, text=True
+            ).stdout
 
         self.new = 0
         self.object_id_dict = defaultdict(set)
         with self.session_manager() as session:
             self.session = session
-            self.app_config_obj = self.session.make(AppConfigUpdate(commit=subprocess.run(
-                ['git', 'rev-parse', '--verify', 'HEAD'], capture_output=True, text=True
-            ).stdout))
+            self.app_config_obj = self.session.make(AppConfigUpdate(commit=commit_hash))
             self.rev = self.app_config_obj.id
             self.handle_firmware()
             self.handle_eeprom_xlsx()

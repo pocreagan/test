@@ -17,7 +17,6 @@ from typing import Union
 from attrdict import AttrDict
 
 from instruments.wet.rs485 import WETCommandError
-from instruments.wet.rs485 import WETNoResponseError
 from model.db.schema import Configuration
 from model.db.schema import ConfirmUnitIdentityIteration
 from model.db.schema import EEPROMConfigIteration
@@ -277,16 +276,14 @@ class Station3(TestStation):
         # program and thermal as indicated
         if model.firmware is not None:
             # check for chroma communication, if no bootloader at least that's a test failure
-
-            iteration_model.firmware_iteration = self.session.make(FirmwareIteration(
-                firmware_id=model.firmware_object.version_id,
-            ))
-
             # noinspection PyUnresolvedReferences
             if not self.ftdi.wet_at_least_bootloader().resolve():
                 return self.test_failure('failed to establish communication with the chroma')
 
             programming_promise = None
+            iteration_model.firmware_iteration = self.session.make(FirmwareIteration(
+                firmware_id=model.firmware_object.version_id,
+            ))
 
             if not self.ftdi.dta_is_programmed_correctly(model.firmware_object.version).resolve():
                 if not self.ftdi.dta_erase_and_confirm().resolve():
