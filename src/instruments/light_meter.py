@@ -9,7 +9,6 @@ from dataclasses import fields
 from datetime import datetime
 from functools import lru_cache
 from operator import attrgetter
-from operator import itemgetter
 from pathlib import Path
 from statistics import mean
 from time import perf_counter
@@ -19,11 +18,10 @@ from typing import Deque
 from typing import Dict
 from typing import Iterable
 from typing import List
-from typing import Optional
 from typing import Tuple
 
-from src.base.actor import configuration
-from src.base.actor import proxy
+from model import configuration
+from base.concurrency import proxy
 from src.instruments.base.dll import DLLFunc
 from src.instruments.base.dll import load_dll
 from src.instruments.base.instrument import Instrument

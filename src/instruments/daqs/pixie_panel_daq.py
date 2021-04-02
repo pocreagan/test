@@ -1,7 +1,7 @@
 import itertools
 import time
 
-from src.base.actor import proxy
+from base.concurrency import proxy
 from src.instruments.base.daq import AIFinite
 from src.instruments.base.daq import AIVoltageChannel
 from src.instruments.base.daq import DAQChassis

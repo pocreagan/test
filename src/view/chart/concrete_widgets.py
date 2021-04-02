@@ -34,6 +34,7 @@ class UnitInfo(Region):
         )
 
     def _init_results(self) -> None:
+        # TODO: add <option> display
         _kwargs = dict(ha='center', va='center', color='white')
         self.artists['unit_data'] = {
             'sn_mn': self.var(self.ax.text(
@@ -43,8 +44,9 @@ class UnitInfo(Region):
             ))
         }
 
-    def set_result(self, timestamp: datetime = None, sn: str = None, mn: str = None) -> None:
-        self.artists['unit_data']['sn_mn'].set_text(mn + '\n' + sn)
+    def set_result(self, timestamp: datetime = None, sn: int = None, mn: int = None) -> None:
+        # TODO: CFG map 938 -> '10-00938'
+        self.artists['unit_data']['sn_mn'].set_text(f'{mn}\n{sn}')
         self.artists['unit_data']['timestamp'].set_text(str(timestamp).split('.')[0])
 
     def _reset_results(self) -> None:

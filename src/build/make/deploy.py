@@ -3,8 +3,8 @@ from pathlib import Path
 
 
 def main():
-    src = Path(r'C:\Projects\test_framework\build\bin\Debug')
-    dest = Path(r'W:\Test Data Backup\Patrick\test_framework\bin')
+    src = Path(r'C:\Projects\test\build\bin\Debug')
+    dest = Path(r'W:\Test Data Backup\test\bin\bin')
 
     assert src.exists()
     assert dest.exists()

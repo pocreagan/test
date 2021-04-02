@@ -6,13 +6,15 @@ from typing import *
 import PIL
 from PIL import ImageTk
 
+from model.resources import COLORS
 from src.base.concurrency.concurrency import ChildTerminus
 from src.base.general import do_if_not_done
-from src.base.load import tuple_to_hex_color
 from src.base.log import logger
+from src.model.load import tuple_to_hex_color
+from src.model.resources import RESOURCE
 from src.view.base import component
-from src.view.base.window import Window
 from src.view.base.placement import Category
+from src.view.base.window import Window
 
 __all__ = [
     'Cell',
@@ -31,18 +33,22 @@ class Cell(ChildTerminus, tk.Frame):
     parent: Window
     is_enabled: bool = True
     content: tk.Label = None
-    _enable_state_vars = {True: (APP.V.COLORS.background.lighter, 'enabled'),
-                          False: (APP.V.COLORS.background.normal, 'disabled'), }
-    _fresh_interval_ms: int = APP.V.window['fresh_data_interval_ms']
+    _view_config = RESOURCE.cfg('view')
+
+    _enable_state_vars = {True: (COLORS.medium_grey, 'enabled'),
+                          False: (COLORS.dark_grey, 'disabled'), }
+    _fresh_interval_ms: int = _view_config['window']['fresh_data_interval_ms']
+
+    _greyscale = _view_config['grey']
     _fresh_sequence: List[str] = [
-        tuple_to_hex_color((v, v, v)) for v in range(APP.V.grey['light'], APP.V.grey['medium'], -1)
+        tuple_to_hex_color((v, v, v)) for v in range(_greyscale['light'], _greyscale['medium'], -1)
     ]
     category: Category
 
     @property
     def font(self) -> tk.font.Font:
         if not self.__font:
-            f = getattr(APP.V.FONTSIZE, self.__class__.__name__.upper(), None)
+            f: int = self._view_config['font_size'][self.__class__.__name__.upper()]
             if f:
                 self.__font = self._make_font(f)
             else:
@@ -70,7 +76,7 @@ class Cell(ChildTerminus, tk.Frame):
         self.labels = list()
         self.scheduled_reference = None
         self._normal_bg = None
-        self.constants = APP.V.widget_constants.get(self.__class__.__name__, dict())
+        self.constants = self._view_config['widget_constants'].get(self.__class__.__name__, {})
         self._fresh_index = None
 
     def __post_init__(self):
@@ -86,11 +92,11 @@ class Cell(ChildTerminus, tk.Frame):
         compute dimensions and call overridden make()
         """
         tk.Frame.__init__(self, self.parent)
-        self.config(bg=APP.V.COLORS.background.normal)
+        self.config(bg=COLORS.dark_grey)
 
         # compute relative dimensions
         x, y, w, h = self.pos
-        _y_pad = APP.V.window['PADDING']
+        _y_pad = self._view_config['window']['padding']
         _x_pad = _y_pad / self.parent.screen.w_h_ratio
         _y_shift, _x_shift = _y_pad if y == 0 else 0, _x_pad if x == 0 else 0
         _rel_x = x + _x_shift
@@ -315,11 +321,7 @@ class Static:
         _force_enabled: bool = False
 
         def __post_init__(self):
-            if not self._force_enabled:
-                self.disable()
-            else:
-                self.enable()
-            self.config(bg=APP.V.COLORS.background.normal)
-            self.img = self._make_image(APP.R.img(self.filepath))
-            self._load(tk.Label(self, anchor='center', image=self.img,
-                                bg=APP.V.COLORS.background.darker))
+            (self.enable if self._force_enabled else self.disable)()
+            self.config(bg=COLORS.dark_grey)
+            self.img = self._make_image(RESOURCE.img(self.filepath))
+            self._load(tk.Label(self, anchor='center', image=self.img, bg=COLORS.black))

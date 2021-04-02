@@ -8,7 +8,7 @@ from typing import Union
 
 from attrdict import AttrDict
 
-from src.base.actor import configuration
+from model import configuration
 from src.base.general import test_nom_tol
 from src.base.log import logger
 from src.instruments.base.instrument import instruments_joined
@@ -29,6 +29,7 @@ from src.model.db.schema import Configuration
 from src.model.db.schema import ConfirmUnitIdentityIteration
 from src.model.db.schema import EEPROMConfigIteration
 from src.model.db.schema import FirmwareIteration
+from src.model.db.schema import LightingDUT
 from src.model.db.schema import LightingStation3Iteration
 from src.model.db.schema import LightingStation3LightMeasurement
 from src.model.db.schema import LightingStation3LightMeterCalibration
@@ -36,7 +37,6 @@ from src.model.db.schema import LightingStation3ParamRow
 from src.model.db.schema import LightingStation3ResultRow
 from src.stations.lighting.station3.model import Station3Model
 from src.stations.lighting.station3.model import Station3TestModel
-from src.stations.test_station import DUTIdentityModel
 from src.stations.test_station import TestFailure
 from src.stations.test_station import TestStation
 
@@ -49,7 +49,7 @@ class Station3(TestStation):
     models: Dict[int, Dict[Optional[str], Station3TestModel]]
     model: Station3TestModel
     iteration: LightingStation3Iteration
-    unit: DUTIdentityModel
+    unit: LightingDUT
 
     ps = BKPowerSupply()
     lm = LightMeter()
@@ -153,7 +153,7 @@ class Station3(TestStation):
         return config_model
 
     @instruments_joined
-    def unit_identity(self, unit: DUTIdentityModel, do_write: bool) -> ConfirmUnitIdentityIteration:
+    def unit_identity(self, unit: LightingDUT, do_write: bool) -> ConfirmUnitIdentityIteration:
         unit_identity_confirmation_model = ConfirmUnitIdentityIteration()
         self.iteration.unit_identity_confirmations.append(unit_identity_confirmation_model)
         try:
@@ -179,7 +179,7 @@ class Station3(TestStation):
 
         return connection
 
-    def iteration_setup(self, unit: DUTIdentityModel) -> None:
+    def iteration_setup(self, unit: LightingDUT) -> None:
         self.unit = unit
         self.model = self.models.get(self.unit.mn).get(self.unit.option)
 
@@ -242,7 +242,7 @@ class Station3(TestStation):
         return self.iteration
 
     @classmethod
-    def debug_test(cls, unit: DUTIdentityModel) -> None:
+    def debug_test(cls, unit: LightingDUT) -> None:
         with logger:
             station = Station3(connect(echo_sql=True))
             station.instruments_setup()
@@ -250,4 +250,4 @@ class Station3(TestStation):
 
 
 if __name__ == '__main__':
-    Station3.debug_test(DUTIdentityModel(12701575, 918, 'b'))
+    Station3.debug_test(LightingDUT(12701575, 918, 'b'))

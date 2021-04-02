@@ -1,5 +1,6 @@
 import logging
 import os
+import threading
 from functools import lru_cache
 from operator import attrgetter
 from pathlib import Path
@@ -15,13 +16,14 @@ from typing import Union
 
 import yaml as yml
 
+from src.base.general import setdefault_attr_from_factory
+from src.model.load import tuple_to_hex_color
+
 __all__ = [
     'Configuration',
     'get_configs_on_object',
     'update_configs_on_object',
 ]
-
-from src.base.general import setdefault_attr_from_factory
 
 _T = TypeVar('_T')
 _PATH_T = Union[Path, str]
@@ -116,27 +118,30 @@ class _ConfigFieldFromObj(_ConfigField):
             raise AttributeError(f'failed to find config value "{self.key or k}')
 
 
+_shared_drive_checked = False
+
+
+def _check_path(fp: _PATH_T) -> str:
+    global _shared_drive_checked
+
+    if not (os.path.exists(r'\\wet-pdm\Common') or _shared_drive_checked):
+        raise ValueError('Must be connected to the W shared drive.')
+    _shared_drive_checked = True
+
+    fp = str(_config_file_root / fp)
+
+    if isinstance(fp, str):
+        if not os.path.isabs(fp):
+            raise ValueError(f'{__name__} requires an abs path.')
+    else:
+        raise ValueError(f'{__name__} requires a str or Path arg')
+
+    if not os.path.exists(fp):
+        raise ValueError(f'{__name__}: no file found at {fp}')
+    return fp
+
+
 class _ConfigFrom:
-    _checked_shared_drive = False
-
-    @classmethod
-    def __check_path(cls, fp: _PATH_T) -> str:
-        if not os.path.exists(r'\\wet-pdm\Common') and not cls._checked_shared_drive:
-            raise ValueError('Must be connected to the W shared drive.')
-        cls._checked_shared_drive = True
-
-        fp = str(_config_file_root / fp)
-
-        if isinstance(fp, str):
-            if not os.path.isabs(fp):
-                raise ValueError(f'{cls.__qualname__} requires an abs path.')
-        else:
-            raise ValueError(f'{cls.__qualname__} requires a str or Path arg')
-
-        if not os.path.exists(fp):
-            raise ValueError(f'{cls.__qualname__}: no file found at {fp}')
-        return fp
-
     def __init__(self, fp: str, header: str, field_type: Type[_ConfigField]) -> None:
         self.fp = fp
         self.header = header
@@ -152,41 +157,51 @@ class _ConfigFrom:
         self._fields.append(field)
         return field
 
+    def tk_color(self) -> str:
+        # noinspection PyTypeChecker
+        return self.field(tuple, transform=tuple_to_hex_color)
+
     def __set_name__(self, owner, name):
         self.owner = owner
         self.name = name
         setdefault_attr_from_factory(owner, _config_obj_dict_key, dict)[self.name] = self
 
-    def update_from_shared_drive(self) -> None:
-        self.update_from(_load_yml(self.__check_path(self.fp)))
+    def update_from_file_system(self) -> None:
+        self.update_from(_load_yml(self.fp))
 
     def update_from(self, config: Dict[str, Any]) -> None:
         [field.set_value(config) for field in self._fields]
 
 
 class Configuration:
-    pass
-
     # @classmethod
     # def from_dict(cls, d: Dict[str, Any], header: str = None, name: str = None) -> _ConfigFrom:
     #     return _ConfigFrom(cls.__narrow_lookup(d, header), _ConfigFieldFromDict, name)
-
     # @classmethod
     # def from_obj(cls, obj) -> _ConfigFrom:
     #     return _ConfigFrom(obj, _ConfigFieldFromObj, obj.__qualname__)
+    pass
 
 
 def update_configs_on_object(obj) -> None:
-    [config.update_from_shared_drive() for config in get_configs_on_object(obj)]
+    [config.update_from_file_system() for config in get_configs_on_object(obj)]
 
 
 def from_yml(fp: _PATH_T, header: str = None) -> _ConfigFrom:
+    return _ConfigFrom(_check_path(fp), header, _ConfigFieldFromDict)
+
+
+def from_resource(fp: _PATH_T, header: str = None) -> _ConfigFrom:
     return _ConfigFrom(fp, header, _ConfigFieldFromDict)
 
 
+_lock = threading.RLock()
+
+
 def _load_yml(fp: str) -> Dict:
-    with open(fp) as y:
-        return yml.load(y, Loader=yml.FullLoader)
+    with _lock:
+        with open(fp) as y:
+            return yml.load(y, Loader=yml.FullLoader)
 
 
 def get_configs_on_object(obj) -> List[_ConfigFrom]:

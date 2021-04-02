@@ -64,14 +64,12 @@ class MouseAction(EqEnum):
         state.click_coordinates = getattr(self, 'click_coordinates', None)
         return state
 
+
 class Station(EqEnum):
-    MASTER = auto()
-    LL1 = auto()
-    LL2 = auto()
-    LL3 = auto()
-    PSU1 = auto()
-    PSU2 = auto()
-    BRIGHT = auto()
+    station1 = auto()
+    station2 = auto()
+    station3 = auto()
+    bright = auto()
 
 
 class LeakTestStage(EqEnum):

@@ -4,9 +4,12 @@ from functools import partial
 from tkinter import font
 from typing import *
 
+# from model.resources import APP
+from model.resources import COLORS
+from model.resources import RESOURCE
 from src.base.log import logger
 from src.base.general import truncate
-from src.base.load import dynamic_import
+from src.model.load import dynamic_import
 from src.model.enums import MouseAction
 from src.view.base.cell import *
 from src.view.base.component import *
@@ -33,12 +36,12 @@ class Logging(Cell):
     """
 
     def __post_init__(self):
-        self._update_interval = APP.G.LOG_DISPLAY_UPDATE_INTERVAL_MS
+        self._update_interval = RESOURCE.cfg('general')['LOG_DISPLAY_UPDATE_INTERVAL_MS']
         self.font = font.nametofont('TkFixedFont')
-        self.font.config(size=APP.V.FONTSIZE.LOGGING)
+        self.font.config(size=RESOURCE.cfg('view')['FONTSIZE']['LOGGING'])
         self.vbar = Scrollbar(self)
 
-        bg_ = APP.V.COLORS.background.darker
+        bg_ = COLORS.black
         self.text = tk.Text(self, state='disabled', wrap='none', relief='flat', cursor='arrow',
                             fg=APP.V.COLORS.text.normal, bg=bg_,
                             selectbackground=bg_, inactiveselectbackground=bg_,
@@ -126,8 +129,8 @@ class Instruments(Cell):
         self.instruments: Dict[str, 'Instruments.Instrument'] = dict()
         for i, s in enumerate(_instruments):
             label = Label(self, anchor="center", font=self.font,
-                          fg=getattr(APP.V.COLORS.instrument, 'checking', 'bad'),
-                          bg=APP.V.COLORS.background.lighter)
+                          fg=COLORS.white,
+                          bg=COLORS.medium_grey)
             label.text(getattr(APP.INSTRUMENTS, s)['display_name'])
             self.instruments[s] = self.Instrument(
                 widget=label.place(x=_spot * i, y=0, height=1, width=_spot), state='checking'
@@ -264,7 +267,7 @@ class Chart(Cell):
     data_iter: Iterator
 
     def __post_init__(self):
-        _bg = APP.V.COLORS.background.darker
+        _bg = COLORS.black
         _dpi = self.parent.screen.dpi
 
         _import_path = APP.STATION.import_path

@@ -1,7 +1,9 @@
-from framework.model import *
-from view.base.placement import SIZING
-from framework.view.widgets import *
-from view.base.window import *
+from src.base.log import logger
+from src.view.base.placement import SIZING
+from src.view.base.window import *
+from src.view.widgets.dynamic import *
+from src.view.widgets.history import *
+from src.view.widgets.static import *
 
 __all__ = [
     'Window',

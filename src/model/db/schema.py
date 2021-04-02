@@ -30,7 +30,7 @@ from sqlalchemy.sql.sqltypes import LargeBinary
 from sqlalchemy.sql.sqltypes import String
 from sqlalchemy.sql.sqltypes import Text
 
-from src.base.actor.configuration import get_configs_on_object
+from model.configuration import get_configs_on_object
 from src.base.db.connection import SessionType
 from src.base.db.meta import *
 from src.model.enums import *
@@ -41,6 +41,7 @@ __all__ = [
     'ConfigFile',
     'LightingStation1ResultRow',
     'YamlFile',
+    'LightingDUT',
     'Configuration',
     'EEPROMConfig',
     'EEPROMRegister',
@@ -156,6 +157,15 @@ class YamlFile(Schema):
 lighting_station3_rows_association_table = Relationship.association(
     Schema, 'LightingStation3Param', 'rows', 'LightingStation3ParamRow', 'params',
 )
+
+
+class LightingDUT(Schema):
+    _repr_fields = ['sn', 'mn', 'option']
+    sn = Column(Integer, nullable=False)
+    mn = Column(Integer, nullable=False)
+    option = Column(String(128), nullable=True)
+
+    __table_args__ = (UniqueConstraint('sn', 'mn', 'option'),)
 
 
 class LightingStation3Param(Schema):

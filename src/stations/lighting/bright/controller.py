@@ -3,12 +3,12 @@ from random import choice
 from random import randint
 from typing import *
 
-from framework.base.general import random_condition
-from framework.base.concurrency import *
-from framework.base.message import ControllerAction
-from framework.base.message import Message
-from framework.base.message import ViewAction
-from framework.model import *
+from src.base.general import random_condition
+from src.base.concurrency.concurrency import *
+from src.base.concurrency.message import ControllerAction
+from src.base.concurrency.message import Message
+from src.base.concurrency.message import ViewAction
+from src.base.log import logger
 
 __all__ = [
     'Controller',
@@ -17,7 +17,7 @@ __all__ = [
 
 log = logger(__name__)
 
-TEST_RUN_D_T = dict[str, Union[int, bool, datetime.datetime, str, str]]
+TEST_RUN_D_T = Dict[str, Union[int, bool, datetime.datetime, str, str]]
 
 
 class BoolDict(dict):
@@ -91,17 +91,17 @@ class History(CellCounterpart):
 
 
 class Instruments(ThreadHandler, CellCounterpart):
-    thread_classes: dict[str, Any]
+    thread_classes: Dict[str, Any]
 
-    def __post_init__(self, instruments: list[str]) -> None:
-        from framework.controller import equipment
+    def __post_init__(self, instruments: List[str]) -> None:
+        from src import instruments as instruments_module
 
         self._instruments_list = instruments
         self._te_ready_dict = BoolDict.fromkeys(self._instruments_list, None)
         self.closed = self._te_ready_dict.all_none
         self.ready = self._te_ready_dict.all_true
 
-        self.thread_classes = {k: getattr(equipment, k) for k in self._instruments_list}
+        self.thread_classes = {k: getattr(instruments_module, k) for k in self._instruments_list}
 
         ThreadHandler.__post_init__(self)
 

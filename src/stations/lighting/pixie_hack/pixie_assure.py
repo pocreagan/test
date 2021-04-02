@@ -5,10 +5,10 @@ from time import sleep
 
 from progressbar import progressbar
 
-from src.base.actor.configuration import Configuration
+from model import configuration
 from src.base.log import logger
-from src.controller.lighting.pixie_hack import HackScript
-from src.controller.test_station import TestInstrument
+from src.stations.lighting.pixie_hack import HackScript
+from src.stations.test_station import TestInstrument
 from src.instruments.dc_power_supplies.bk_ps import BKPowerSupply
 from src.instruments.light_meter import LightMeter
 from src.instruments.wet.nfc import NFC
@@ -23,7 +23,7 @@ class Assure(HackScript):
     ftdi = TestInstrument(RS485(), logging.DEBUG)
     nfc = TestInstrument(NFC(), logging.INFO)
 
-    _config = Configuration.from_yml('pixie_hack/.yml')
+    _config = configuration.from_yml('pixie_hack/.yml')
     ASSOCIATION_TABLE_PATH = _config.field(str)
     SHIPMENT_ASSOCIATION_TABLE_PATH = _config.field(str)
     AFTER_ERASE_WAIT_S = _config.field(float)

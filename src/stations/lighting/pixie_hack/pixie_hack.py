@@ -13,19 +13,19 @@ from typing import List
 import pandas as pd
 from progressbar import progressbar
 
-from src.base.actor.configuration import Configuration
+from model import configuration
 from src.base.concurrency.concurrency import ConnectionClosed
 from src.base.concurrency.concurrency import SentinelReceived
 from src.base.concurrency.concurrency import ThreadConnection
 from src.base.log import logger
-from src.controller.test_station import TestInstrument
-from src.controller.test_station import TestStation
+from src.stations.test_station import TestInstrument
+from src.stations.test_station import TestStation
 from src.instruments.dc_power_supplies import DCLevel
 from src.instruments.dc_power_supplies.bk_ps import BKPowerSupply
 from src.instruments.light_meter import LightMeter
 from src.instruments.wet.nfc import NFC
 from src.instruments.wet.rs485 import RS485
-from src.pixie_hack import messages
+from src.stations.lighting.pixie_hack import messages
 
 log = logger(__name__)
 
@@ -74,7 +74,7 @@ class Pixie2pt0Station(TestStation):
     ftdi = TestInstrument(RS485(), logging.DEBUG)
     nfc = TestInstrument(NFC(), logging.INFO)
 
-    _config = Configuration.from_yml('pixie_hack/.yml')
+    _config = configuration.from_yml('pixie_hack/.yml')
     TESTING_FW_PATH = _config.field(str)
     PRODUCTION_FW_PATH = _config.field(str)
     RESULT_PATH = _config.field(str)

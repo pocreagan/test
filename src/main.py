@@ -1,6 +1,6 @@
 from multiprocessing import freeze_support
 
-from src.base.load import dynamic_import
+from src.model.load import dynamic_import
 from src.model.resources import APP, logger
 
 
@@ -9,14 +9,6 @@ def hidden_imports() -> None:
     explicit import statements needed in main.py for binary build module discovery
     importing in function scope to prevent unnecessary imports on controller spawn
     """
-    from src import view
-    import src.view.chart.concrete_widgets
-    from src.lighting.LL2 import chart as c2
-    from src.lighting.LL2 import controller as con2
-    from src.lighting.LL2 import view as v2
-    from src.lighting.LL3 import chart as c3
-    from src.lighting.LL3 import controller as con3
-    from src.lighting.LL3 import view as v3
 
 
 def main() -> None:
@@ -24,9 +16,9 @@ def main() -> None:
     configure and start the main process logger
     load and start the view and controller
     """
-    APP.log_runtime_info()
     log = logger(__name__)
-    log.info(f'Starting Application {APP.TITLE}...')
+    log.info(f'starting application {APP.TITLE}...')
+    log.debug(APP.runtime_info())
 
     import_path = APP.STATION.import_path
 
@@ -50,11 +42,12 @@ def main() -> None:
 
     finally:
         # wait for the controller process to finish
+        log.debug('stopping controller...')
         controller.q.put_sentinel()
-        controller.join(timeout=1.)
-        log.info('closed Controller')
+        controller.join(timeout=5.)
+        log.info('stopped controller')
 
-    log.info(f'Closed Application {APP.TITLE}.')
+    log.info(f'closed application {APP.TITLE}.')
 
     # stop listening to the main process logging enqueue queue
     logger.stop()

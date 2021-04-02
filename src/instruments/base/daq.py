@@ -24,7 +24,7 @@ from nidaqmx.system.storage.persisted_scale import PersistedScale
 from typing_extensions import Final
 
 from src.base import register
-from src.base.actor import proxy
+from base.concurrency import proxy
 from src.base.decorators import check_for_required_attrs
 from src.base.general import setdefault_attr_from_factory
 from src.base.log import logger

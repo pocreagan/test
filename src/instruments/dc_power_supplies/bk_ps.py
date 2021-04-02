@@ -5,8 +5,8 @@ from typing import Tuple
 
 from src.instruments.dc_power_supplies.connection_states import LightLineV1ConnectionState
 from src.base import register
-from src.base.actor import proxy
-from src.base.actor import configuration
+from base.concurrency import proxy
+from model import configuration
 from src.instruments.base.instrument import instrument_debug
 from src.instruments.base.instrument import InstrumentError
 from src.instruments.base.visa import VISA

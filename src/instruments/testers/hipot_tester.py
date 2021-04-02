@@ -9,8 +9,8 @@ except ImportError:
     raise ImportError('pip install parse')
 
 from src.base import register
-from src.base.actor import proxy
-from src.base.actor import configuration
+from base.concurrency import proxy
+from model import configuration
 from src.instruments.base.instrument import InstrumentError
 from src.instruments.base.instrument import instrument_debug
 from src.instruments.base.serial import Serial

@@ -1,9 +1,12 @@
 import os
 from ctypes import CDLL
+from functools import wraps
 from pathlib import Path
 from types import ModuleType
+from typing import Callable
 from typing import Dict
 from typing import Tuple
+from typing import TypeVar
 from typing import Union
 
 import yaml as yml
@@ -56,15 +59,16 @@ def tuple_to_hex_color(color: Tuple[int, ...]) -> str:
     return "#%02x%02x%02x" % color[:3]
 
 
-def lazy_access(f):
-    _bool_attr_name = f'__lazy_access_done_for_{f.__name__}'
-    _attr_name = f'__lazy_accessed_{f.__name__}'
+_lazy_access_sentinel = object()
+_T = TypeVar('_T')
 
+
+def lazy_access(f: Callable[..., _T]) -> _T:
+    @wraps(f)
     def inner(self):
-        if not getattr(self, _bool_attr_name, None):
-            setattr(self, _attr_name, f(self))
-            setattr(self, _bool_attr_name, True)
-        return getattr(self, _attr_name)
+        v = f(self)
+        setattr(self, f.__name__, v)
+        return v
 
     return inner
 

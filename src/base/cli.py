@@ -6,7 +6,7 @@ from typing import Union
 
 import click
 
-from src.base.actor.proxy import exposed
+from base.concurrency.proxy import exposed
 from src.base.log import logger
 
 __all__ = [

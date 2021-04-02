@@ -11,9 +11,9 @@ from typing import TypeVar
 # noinspection SpellCheckingInspection
 from src.base import atexit_proxy as atexit
 from src.base import register
-from src.base.actor import proxy
-from src.base.actor.configuration import update_configs_on_object
-from src.base.actor.proxy import CancelledError
+from base.concurrency import proxy
+from model.configuration import update_configs_on_object
+from base.concurrency.proxy import CancelledError
 from src.base.general import setdefault_attr_from_factory
 from src.base.log import logger
 from src.base.log.mixin import Logged

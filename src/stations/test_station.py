@@ -1,20 +1,21 @@
-from dataclasses import dataclass
 from itertools import chain
-from time import perf_counter
-from typing import Callable, Dict, Any
+from typing import Any
+from typing import Callable
+from typing import Dict
 from typing import Generic
 from typing import Optional
+from typing import Protocol
 from typing import Type
 from typing import TypeVar
 
 from typing_extensions import Literal
 
-from src.model.db.schema import AppConfigUpdate
 from src.base.db.connection import SessionManager
 from src.base.db.connection import SessionType
 from src.base.decorators import configure_class
 from src.base.log.mixin import Logged
 from src.instruments.base import instrument
+from src.model.db.schema import AppConfigUpdate
 from src.model.db.schema import YamlFile
 
 __all__ = [
@@ -45,8 +46,7 @@ class StationFailure(Failure):
     pass
 
 
-@dataclass
-class DUTIdentityModel:
+class DUTIdentityModel(Protocol):
     sn: int
     mn: int
     option: Optional[str] = None

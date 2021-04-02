@@ -1,7 +1,6 @@
 from typing import Callable
 from typing import Type
 
-from src.base.actor import proxy
 from src.base.log.mixin import Logged
 from src.instruments.dc_power_supplies.connection_states import ConnectionStateCalcType
 from src.instruments.dc_power_supplies.connection_states import ConnectionState

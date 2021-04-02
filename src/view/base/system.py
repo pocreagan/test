@@ -8,7 +8,7 @@ from typing import *
 import win32api
 from fontTools import ttLib
 
-from src.base.load import lazy_access
+from src.model.load import lazy_access
 from src.base.log import logger
 
 __all__ = [

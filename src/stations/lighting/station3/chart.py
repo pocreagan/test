@@ -9,6 +9,7 @@ from matplotlib.collections import PatchCollection
 from matplotlib.patches import Circle
 from matplotlib.patches import FancyBboxPatch
 
+from src.model.resources import RESOURCE
 from src.base.log import logger
 from src.view.chart import colors
 from src.view.chart import font
@@ -18,7 +19,7 @@ from src.view.chart.base import *
 from src.view.chart.concrete_widgets import ConfigData
 from src.view.chart.concrete_widgets import TestStatus
 from src.view.chart.concrete_widgets import UnitInfo
-from src.stations.lighting.station3.chart import messages
+from src.model.db import schema
 
 log = logger(__name__)
 
@@ -61,9 +62,6 @@ CHART_LABELS_FONT = font.normal(11)
 CH_INFO_FONT_VALUE = font.bold(8)
 CH_INFO_FONT_SPEC = font.normal(8)
 
-cie_fp = r'C:\Projects\test_framework\src\framework\model\resources\img\colorspace.p'
-unit_img_fp = r'C:\Projects\test_framework\src\framework\model\resources\img\10-00{mn}.p'
-
 __all__ = [
     'Plot',
 ]
@@ -80,7 +78,7 @@ class CIE(Region):
 
     def _set_background(self) -> None:
         self.ax.imshow(
-            helper.img_from_pickle(cie_fp),
+            helper.img_from_pickle(RESOURCE.img('colorspace.p')),
             origin='upper', extent=cie_extent, alpha=1, zorder=10
         )
         patches = [
@@ -411,22 +409,22 @@ class Plot(Root):
         raise ValueError(f'type {type(msg)} {msg} not recognized')
 
     @update.register
-    def _(self, msg: messages.TestResult) -> None:
+    def _(self, msg: schema.LightingStation3Iteration) -> None:
         self.test_status.set_result(msg.status, colors.STEP_PROGRESS_COLORS[msg.status])
 
     @update.register
-    def _(self, msg: messages.UnitData) -> None:
+    def _(self, msg: schema.LightingDUT) -> None:
         self.unit_info.set_result(msg.timestamp, msg.sn, msg.mn)
         self.config_data.set_result(msg.config)
 
     @update.register
-    def _(self, msg: messages.Thermal_Measurement) -> None:
+    def _(self, msg: schema.LightingStation3LightMeasurement) -> None:
         drop = self.big_chart.thermal.set_result(msg.string_dmx, msg.fcd)
         if drop:
             self._add_result(msg.string_dmx, 'drop', drop * 100)
 
     @update.register
-    def _(self, msg: messages.String_Measurement) -> None:
+    def _(self, msg: schema.LightingStation3ResultRow) -> None:
         k, x, y = msg.string_dmx, msg.x, msg.y
 
         self._add_result(k, 'dist', [x, y])

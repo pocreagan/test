@@ -1,7 +1,7 @@
 from simple_pyspin import Camera as Spinnaker
 
-from src.base.actor import proxy
-from src.base.actor import configuration
+from base.concurrency import proxy
+from model import configuration
 from src.instruments.base.instrument import Instrument
 from src.instruments.base.instrument import instrument_debug
 from src.instruments.base.instrument import InstrumentError

@@ -4,6 +4,8 @@ import tkinter as tk
 from functools import partial
 from typing import *
 
+from src.model.resources import APP
+from src.model.resources import RESOURCE
 from src.base.concurrency import message
 from src.base.general import call
 from src.base.general import do_if_not_done
@@ -35,7 +37,7 @@ class Binding:
         self.name = self.__class__.__name__
         self.parent = parent
         self.check_parent()
-        self.constants = APP.V.hid.get(self.name.lower())
+        self.constants = RESOURCE.cfg('view')['hid'].get(self.name.lower())
         self.bindings: Dict[str, Dict[str, str]] = self.constants['bindings']
         self.__post_init__()
         self._active = True
@@ -117,7 +119,7 @@ class Keyboard(Binding):
         self.parse_funcs: List[Tuple[re.Pattern, str]] = []
         for k in APP.STATION.scan_parsers:
             # compile ini regex and map to method name, ex: ..., 'dut_scan'
-            f, _re = f'{k.lower()}_scan', APP.V.hid['keyboard']['re'][k]
+            f, _re = f'{k.lower()}_scan', RESOURCE.cfg('view')['hid']['keyboard']['re'][k]
             self.parse_funcs.append((re.compile(_re), f))
             log.debug(f'added parser "{_re}" -> {f}')
 
@@ -198,7 +200,7 @@ class Mouse(Binding):
     }
 
     # calculate drag angle categories and drag length threshold from view ini
-    __responsiveness = APP.V.hid['mouse']['responsiveness']
+    __responsiveness = RESOURCE.cfg('view')['hid']['mouse']['responsiveness']
     _drag = int(__responsiveness['CLICK_SWIPE_THRESHOLD_PX'])
 
     # square click threshold once, here, to speed up mouse action filter
@@ -363,4 +365,3 @@ class HID:
         when the context manager completes execution, start handling hid events again
         """
         self.unmute()
-

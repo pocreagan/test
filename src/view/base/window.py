@@ -3,7 +3,9 @@ from typing import List
 
 from src.base.concurrency.message import *
 from src.base.log import logger
-from src.model import APP
+from src.model.resources import APP
+from src.model.resources import COLORS
+from src.model.resources import RESOURCE
 from src.view.base.human_input import HID
 from src.view.base.placement import *
 from src.view.base.system import *
@@ -27,6 +29,7 @@ class Window(tk.Tk):
     font: TypeFace
     hid: HID
     log_deque: MockLogDeque
+    pad_px: int
 
     def __init__(self) -> None:
         """
@@ -35,7 +38,7 @@ class Window(tk.Tk):
         log.debug('instantiating Window...')
 
         self.name = self.__class__.__name__
-        self.constants = APP.V.window
+        self.constants = RESOURCE.cfg('view')['window']
         self.w_px, self.h_px = APP.STATION.resolution
         self.widgets_by_position = dict()
         self.categories = self.categories or dict()
@@ -103,9 +106,9 @@ class Window(tk.Tk):
         """
         set Window-level style attributes
         """
-        self.title(APP.G.APPLICATION_NAME)
-        self.config(bg=APP.V.COLORS.background.darker)
-        self.font = TypeFace(APP.R.font(self.constants['font']))
+        self.title(APP.name)
+        self.config(bg=COLORS.black)
+        self.font = TypeFace(RESOURCE.font(self.constants['font']))
 
     def configure_window(self) -> None:
         """

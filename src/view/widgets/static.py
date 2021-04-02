@@ -2,6 +2,7 @@ import datetime
 from typing import *
 
 from src.base.log import logger
+from src.model.resources import APP
 from src.view.base.cell import *
 
 __all__ = [

@@ -6,7 +6,7 @@ from typing import List
 from typing import Optional
 from typing import Type
 
-from src.base.actor import configuration
+from model import configuration
 from src.base.db.connection import SessionManager
 from src.base.db.connection import SessionType
 from src.instruments.dc_power_supplies import connection_states

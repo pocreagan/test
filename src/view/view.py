@@ -1,10 +1,11 @@
 import queue
 from typing import Optional
 
-from src.base.log import logger
 from src.base.concurrency.concurrency import *
 from src.base.concurrency.message import *
+from src.base.log import logger
 from src.base.log.objects import Handler
+from src.model.resources import APP
 from src.view.base.window import Window
 
 __all__ = [
@@ -18,7 +19,7 @@ class View(parent_terminus(ViewAction, ControllerAction), Window):  # type: igno
     log_deque: Optional[Handler.Deque] = None
 
     def __init__(self, q: ProcessConnection) -> None:
-        self._poll_interval = APP.G.POLLING_INTERVAL_MS
+        self._poll_interval = APP.G.get('POLLING_INTERVAL_MS')
 
         self._q = q
         self._registered_messages = CallbackRegistry()

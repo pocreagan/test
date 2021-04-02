@@ -13,8 +13,8 @@ from typing import TypeVar
 from typing import Union
 
 from src.base import register
-from src.base.actor import proxy
-from src.base.actor import configuration
+from base.concurrency import proxy
+from model import configuration
 from src.instruments.base.instrument import instrument_debug
 from src.instruments.base.instrument import InstrumentError
 from src.instruments.base.tcpip import TCPIP

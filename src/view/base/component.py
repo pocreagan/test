@@ -5,6 +5,7 @@ from typing import Callable
 
 from src.base.general import chain
 from src.base.log import logger
+from src.model.resources import COLORS
 
 __all__ = [
     'Label',
@@ -22,7 +23,7 @@ class Label:
     _obj_type = tk.Label
 
     def __init__(self, parent, anchor: str = 'center', justify: str = 'center',
-                 fg: str = APP.V.COLORS.text.normal, bg: str = APP.V.COLORS.background.lighter,
+                 fg: str = COLORS.white, bg: str = COLORS.medium_grey,
                  font=None, **kwargs) -> None:
         self.parent = parent
         self.parent.labels.append(self)
@@ -150,9 +151,9 @@ class Scrollbar(ttk.Scrollbar):
         if not self.__class__.style_made:
             style = ttk.Style()
             style.theme_use('clam')
-            dark_c = APP.V.COLORS.background.darker
-            medium_c = APP.V.COLORS.background.lighter
-            light_c = APP.V.COLORS.text.normal
+            dark_c = COLORS.black
+            medium_c = COLORS.medium_grey
+            light_c = COLORS.white
             style.configure("Vertical.TScrollbar", gripcount=0,
                             background=dark_c,
                             darkcolor=medium_c,
@@ -194,8 +195,8 @@ class ProgressBar(ttk.Progressbar):
         if not self.__class__.style_made:
             style = ttk.Style()
             style.theme_use('clam')
-            dark_c = APP.V.COLORS.background.darker
-            light_c = APP.V.COLORS.text.normal
+            dark_c = COLORS.black
+            light_c = COLORS.white
             style.configure("Horizontal.TProgressbar",
                             troughcolor=dark_c,
                             bordercolor=dark_c,
@@ -258,9 +259,9 @@ class StepProgress(tk.Frame):
         self.labels = list()
         self.font = self.parent.font
 
-        super().__init__(parent, bg=APP.V.COLORS.background.darker, height=h, **kwargs)
+        super().__init__(parent, bg=COLORS.black, height=h, **kwargs)
 
-        self.label = Label(self, bg=APP.V.COLORS.background.normal)
+        self.label = Label(self, bg=COLORS.dark_grey)
         self.label.text(text)
         self.label.pack(fill=tk.BOTH, expand=1)
 
@@ -268,7 +269,7 @@ class StepProgress(tk.Frame):
         self.progress_bar.setup(max_val)
 
     def start_progress(self) -> None:
-        self.label.color(APP.V.COLORS.instrument.checking, APP.V.COLORS.background.darker)
+        self.label.color(COLORS.white, COLORS.black)
         self.progress_bar.pack(fill=tk.X, expand=1)
 
     def set_progress(self, value: float) -> None:
@@ -276,10 +277,10 @@ class StepProgress(tk.Frame):
 
     def end_progress(self, color) -> None:
         self.progress_bar.pack_forget()
-        self.label.color(color, APP.V.COLORS.background.normal)
+        self.label.color(color, COLORS.dark_grey)
 
     def result_pass(self) -> None:
-        self.end_progress(APP.V.COLORS.instrument.good)
+        self.end_progress(COLORS.green)
 
     def result_fail(self) -> None:
-        self.end_progress(APP.V.COLORS.instrument.bad)
+        self.end_progress(COLORS.red)

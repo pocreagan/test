@@ -1,17 +1,18 @@
 import collections
 import datetime
-import time
 import tkinter as tk
 from dataclasses import dataclass
 from functools import partial
 from typing import *
 
 from src.base.log import logger
+from src.model.resources import COLORS
+from src.model.resources import RESOURCE
 from src.view.base.cell import *
 from src.view.base.component import Label
+from src.view.base.component import Scrollbar
 from src.view.base.helper import with_enabled
 from src.view.base.image_funcs import make_circle_glyph
-from src.view.base.component import Scrollbar
 
 __all__ = [
     'Mode',
@@ -22,7 +23,6 @@ __all__ = [
     'HistoryLength',
     'HistoryRecency',
 ]
-
 
 log = logger(__name__)
 
@@ -55,9 +55,10 @@ class Mode(Cell):
     def __post_init__(self):
         self.object: Label = self._load(Label(self))
         self._settings: Dict[str, 'Mode.Setting'] = {s: self.Setting(
-            self.constants['strings'][s], dict(fg=getattr(APP.V.COLORS.mode, s)), next=_next
-        ) for s, _next in zip([self.checking_str, self.testing_str, self.rework_str],
-                              [None, self.rework_str, self.testing_str])}
+            self.constants['strings'][s], dict(fg=getattr(COLORS, c)), next=_next
+        ) for s, c, _next in zip([self.checking_str, self.testing_str, self.rework_str],
+                                 ['white', 'green', 'blue'],
+                                 [None, self.rework_str, self.testing_str])}
         self._set(self.rework_str)
 
     def _set(self, name: str) -> None:
@@ -121,11 +122,12 @@ class Metrics(Cell):
 
         pass_pct = self.constants['pct'] == 'pass'
         self._make_pct = self._pass_pct if pass_pct else self._fail_pct
-        self._normal_colors = tuple([getattr(APP.V.COLORS.metrics, name) for name in names][:-1])
-        self._checking_colors = tuple([APP.V.COLORS.instrument.checking] * 3)
+        self._normal_colors = (COLORS.green, COLORS.blue, COLORS.green)
+        self._checking_colors = tuple([COLORS.white] * 3)
 
         [[self._load(Label(self, anchor='center',
-                           fg=getattr(APP.V.COLORS.metrics, name), bg=APP.V.COLORS.background.lighter),
+                           fg=RESOURCE.cfg('view').get('old_colors').get('metrics')[name],
+                           bg=COLORS.medium_grey),
                      f'{name}_{row}', x=spot * column, y=.5 * row, height=.5, width=spot
                      ) for column, name in enumerate(names)] for row in range(2)]
 
@@ -194,18 +196,18 @@ class History(Cell):
     # ? https://stackoverflow.com/a/31766128
     # ? https://www.tutorialspoint.com/python/tk_listbox.htm
 
-    _dt_ft: str = APP.V.widget_constants['Time']['DT_FORMAT']
+    _dt_ft: str = RESOURCE.cfg('view')['widget_constants']['Time']['DT_FORMAT']
     _pad: int = 2
     _last_results_fresh: bool
 
     def __post_init__(self):
         # initialize state variables
-        self.configure(bg=APP.V.COLORS.background.darker)
+        self.configure(bg=COLORS.black)
         self._create_kws = dict(pady=self._pad)
         self._kws = dict(
             compound=tk.LEFT, relief='flat', overrelief='flat',
-            disabledforeground=APP.V.COLORS.text.normal, state='disabled',
-            fg=APP.V.COLORS.text.normal, bg=APP.V.COLORS.background.lighter,
+            disabledforeground=COLORS.white, state='disabled',
+            fg=COLORS.white, bg=COLORS.medium_grey,
             bd=0,
         )
         self._pass_ids = set()
@@ -236,10 +238,10 @@ class History(Cell):
         self.vbar = Scrollbar(self)
 
         # make text field
-        bg_ = APP.V.COLORS.background.darker
+        bg_ = COLORS.black
         self.field = tk.Text(
             self, state='disabled', wrap='char', relief='flat', cursor='arrow',
-            fg=APP.V.COLORS.text.normal, bg=bg_, selectbackground=bg_, inactiveselectbackground=bg_,
+            fg=COLORS.white, bg=bg_, selectbackground=bg_, inactiveselectbackground=bg_,
             yscrollcommand=self.vbar.set, pady=0, padx=0,
         )
         self.vbar['command'] = self.field.yview
@@ -263,12 +265,12 @@ class History(Cell):
         """
         if self.last_button_selected:
             try:
-                self.last_button_selected.configure(bg=APP.V.COLORS.background.lighter)
+                self.last_button_selected.configure(bg=COLORS.medium_grey)
             except tk.TclError:
                 # last button can be gone before it's reverted
                 pass
 
-        button.configure(bg=APP.V.COLORS.background.darker)
+        button.configure(bg=COLORS.black)
         self.last_button_selected = button
         log.info(f'button {record["id"]} selected')
 
@@ -557,7 +559,7 @@ class _HistorySelect(Cell):
         self.current_option = _option = self._all_options[self._next_index]
         self._next_index = (self._next_index + 1) % _num_options
 
-        self._label.text(_option).color(self._settings.get(_option, APP.V.COLORS.text.normal))
+        self._label.text(_option).color(self._settings.get(_option, COLORS.white))
 
         if _num_options > 1:
             self.fresh_data()
@@ -602,7 +604,7 @@ class HistoryPartNumber(_HistorySelect):
     _history_attr = '_model_setting'
 
     _settings = {
-        initial_setting: APP.V.COLORS.metrics.label,
+        initial_setting: COLORS.white,
     }
 
 
@@ -613,9 +615,9 @@ class HistoryPassFail(_HistorySelect):
     fail_string = 'f'
 
     _settings = {
-        initial_setting: APP.V.COLORS.metrics.label,
-        pass_string: APP.V.COLORS.metrics.pass_text,
-        fail_string: APP.V.COLORS.metrics.fail_text,
+        initial_setting: COLORS.white,
+        pass_string: COLORS.green,
+        fail_string: COLORS.blue,
     }
 
 
@@ -625,8 +627,8 @@ class HistoryLength(_HistorySelect):
     _history_attr = '_len_f'
 
     _settings = {
-        initial_setting: APP.V.COLORS.text.normal,
-        _filtered_setting: APP.V.COLORS.text.normal,
+        initial_setting: COLORS.white,
+        _filtered_setting: COLORS.white,
     }
 
 
@@ -636,8 +638,8 @@ class HistoryRecency(_HistorySelect):
     _history_attr = '_recency_f'
 
     _settings = {
-        initial_setting: APP.V.COLORS.text.normal,
-        _filtered_setting: APP.V.COLORS.text.normal,
+        initial_setting: COLORS.white,
+        _filtered_setting: COLORS.white,
     }
 
 

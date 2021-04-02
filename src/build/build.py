@@ -1,18 +1,18 @@
 from pathlib import Path
 from typing import *
 
-from make.build_specification import *
+from src.build.make.build_specification import *
 
 __DEBUG__ = True
 
 
 class Testing(BuildSpecification):
     # APPLICATION SETTINGS
-    APPLICATION_ENTRY_POINT: str = 'testing'
-    PROJECT_PATH: Path = Path(r'C:\Projects\jose')
-    RESOURCE_DIR: Path = PROJECT_PATH / r'src\model'
-    BUILD_YAML: Path = RESOURCE_DIR / r'resources\yml\build.yml'
-    ICON_PATH: Optional[Path] = RESOURCE_DIR / r'resources\img\wet_logo.ico'
+    APPLICATION_ENTRY_POINT: str = 'main'
+    PROJECT_PATH: Path = Path(r'C:\Projects\test')
+    RESOURCE_DIR: Path = PROJECT_PATH / r'resources'
+    BUILD_YAML: Path = RESOURCE_DIR / r'cfg\build.yml'
+    ICON_PATH: Optional[Path] = RESOURCE_DIR / r'img\wet_logo.ico'
     ADDITIONAL_BINARIES = []
 
     # MAKE SETTINGS
