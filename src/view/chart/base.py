@@ -21,9 +21,11 @@ __all__ = [
 ]
 
 ANIMATED_ARTISTS = List[plt.Artist]
-VARIABLE_OBJ = Union[plt.Artist, Iterable]
+VARIABLE_OBJ = Union[plt.Artist, Iterable[plt.Artist]]
 ITERATION_DATA = Any
 PATH_LIKE = Union[str, Path]
+
+_T = TypeVar('_T', bound=VARIABLE_OBJ)
 
 
 class Widget:
@@ -36,7 +38,7 @@ class Widget:
         self._variables = list()
         self.__animated = list()
 
-    def var(self, obj: VARIABLE_OBJ) -> VARIABLE_OBJ:
+    def var(self, obj: _T) -> _T:
         _var = self._variables.append
         if hasattr(obj, '__iter__'):
             [_var(o) for o in obj]

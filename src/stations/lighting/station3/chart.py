@@ -9,6 +9,8 @@ from matplotlib.collections import PatchCollection
 from matplotlib.patches import Circle
 from matplotlib.patches import FancyBboxPatch
 
+from model.db.schema import LightingStation3LightMeasurement
+from model.db.schema import LightingStation3ParamRow
 from src.model.resources import RESOURCE
 from src.base.log import logger
 from src.view.chart import colors
@@ -20,6 +22,7 @@ from src.view.chart.concrete_widgets import ConfigData
 from src.view.chart.concrete_widgets import TestStatus
 from src.view.chart.concrete_widgets import UnitInfo
 from src.model.db import schema
+from stations.lighting.station3.model import Station3TestModel
 
 log = logger(__name__)
 
@@ -68,6 +71,7 @@ __all__ = [
 
 
 class CIE(Region):
+    params: Station3TestModel
     OFF_SCREEN = -1, -1
 
     def axis_manipulation(self) -> None:
@@ -84,8 +88,7 @@ class CIE(Region):
         patches = [
             Circle(
                 (x + CIE_X_OFFSET, y + CIE_Y_OFFSET), r, linewidth=0.5
-            ) for x, y, r in zip(*[
-                [
+            ) for x, y, r in zip(*[[
                     d['color_point'][k] for d in self.params.values()
                 ] for k in ['x_nom', 'y_nom', 'dist']
             ])
@@ -114,6 +117,7 @@ class CIE(Region):
 
 
 class Thermal(Region):
+    params: Station3TestModel
     l1 = [(THERM_XI, THERM_YF), (THERM_XF, THERM_YF)]
     l2 = [(THERM_XI, THERM_YI), (THERM_XF, THERM_YI)]
 
@@ -134,28 +138,30 @@ class Thermal(Region):
 
     def _init_results(self) -> None:
         self.artists['initial_fcd_d'] = dict()
-        self.artists['therm'] = {k: self.var(self.ax.plot(
-            self.artists['x_results_d'][k], self.artists['y_results_d'][k],
+        self.artists['therm'] = {param_row.id: self.var(self.ax.plot(
+            self.artists['x_results_d'][param_row.id],
+            self.artists['y_results_d'][param_row.id],
             marker='',
-            color=colors.CH_COLORS[k][0],
+            color=colors.CH_COLORS[param_row.id][0],
             linewidth=THERMAL_CHART_LINE_W_PX,
             alpha=THERMAL_CHART_LINE_ALPHA
-        )[0]) for k in self.params.keys()}
+        )[0]) for param_row in self.params.string_params_rows}
 
-    def set_result(self, ch: str, fcd: float) -> Optional[bool]:
-        initial_fcd = self.artists['initial_fcd_d'].setdefault(ch, fcd)
+    def set_result(self, param_row: LightingStation3ParamRow,
+                    meas: LightingStation3LightMeasurement) -> Optional[bool]:
+        initial_fcd = self.artists['initial_fcd_d'].setdefault(param_row.id, meas.fcd)
 
-        dt = (self.params[ch]['thermal']['dt'] * 10)
-        max_drop = self.params[ch]['thermal']['max_pct'] / 100
+        dt = (self.params[param_row.id]['thermal']['dt'] * 10)
+        max_drop = self.params[param_row.id]['thermal']['max_pct'] / 100
 
-        y = self.artists['y_results_d'][ch]
-        x = self.artists['x_results_d'][ch]
+        y = self.artists['y_results_d'][param_row.id]
+        x = self.artists['x_results_d'][param_row.id]
 
-        drop = ((initial_fcd - fcd) / initial_fcd)
+        drop = ((initial_fcd - meas.fcd) / initial_fcd)
 
         y.append(((len(y) / (dt - 1)) * THERM_DX) + THERM_XI)
         x.append((THERM_DY * (1 - (drop / max_drop))) + THERM_YI)
-        self.artists['therm'][ch].set_data(y, x)
+        self.artists['therm'][param_row.id].set_data(y, x)
 
         if len(y) == dt:
             return drop
@@ -169,6 +175,7 @@ class Thermal(Region):
 
 
 class BarChart(Region):
+    params: Station3TestModel
     RIGHT_TOP = (1, 0)
     LEFT_TOP = (-1, 0)
 
@@ -231,6 +238,7 @@ class BarChart(Region):
 
 
 class WhiteCalculations(RoundedTextMultiLine):
+    params: Station3TestModel
     scaling_factor_y = 0.3
     names = ['cct', 'duv']
 
@@ -273,6 +281,7 @@ class WhiteCalculations(RoundedTextMultiLine):
 
 
 class ChannelInfo(RoundedTextMultiLine):
+    params: Station3TestModel
     scaling_factor_y = 0.55
     names = ['dist', 'fcd', 'P', 'drop']
 
@@ -323,6 +332,7 @@ class ChannelInfo(RoundedTextMultiLine):
 
 
 class BigChart(Region):
+    params: Station3TestModel
     def _set_background(self) -> None:
         pass
 
@@ -352,6 +362,8 @@ CALC_RESULT = Tuple[float, bool]
 
 
 class Plot(Root):
+    params: Station3TestModel
+
     def _add_info_box(self, top: int, cla: INFO_BOX_T, name: str) -> Tuple[int, INFO_BOX]:
         bottom = top + 16
         return bottom, cla(self, self.fig.add_subplot(self.gs[top:bottom, 90:125]), channel_name=name)
@@ -363,14 +375,14 @@ class Plot(Root):
         self.config_data = ConfigData(self, self.fig.add_subplot(self.gs[60:74, 125:]))
         self.test_status = TestStatus(self, self.fig.add_subplot(self.gs[74:88, 125:]))
 
-        first, *rest = keys = self.params.keys()
+        first, *rest = keys = self.params.string_params_rows
         self.artists['channels'] = {}
         top_offset, _bottom, self.channel_info = 5, None, dict()
 
         for i, k in enumerate(keys):
             _top = top_offset + (i * 16)
-            _bottom, widget = self._add_info_box(_top, ChannelInfo, k)
-            self.channel_info[k]: ChannelInfo = widget
+            _bottom, widget = self._add_info_box(_top, ChannelInfo, k.name)
+            self.channel_info[k.name]: ChannelInfo = widget
 
         if not rest:
             self.white_quality: WhiteCalculations = self._add_info_box(69, WhiteCalculations, first)[-1]
