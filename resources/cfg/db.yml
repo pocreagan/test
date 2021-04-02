@@ -1,0 +1,23 @@
+SQLITE_LOG: &id001
+  conn_string: "sqlite:///C:\\Projects\\test\\dev\\db\\log.db"
+  echo_sql: false
+  drop_tables: true
+  time_session: false
+SQLITE_MAIN: &id002
+  conn_string: "sqlite:///C:\\Projects\\test\\dev\\db\\main.db"
+  echo_sql: false
+  drop_tables: false
+  time_session: false
+SQLITE_MEMORY: &id003
+  conn_string: "sqlite://"
+  echo_sql: false
+  drop_tables: false
+  time_session: false
+
+connections:
+  logging: *id001
+  main: *id002
+
+logging:
+  cache_size: 50
+  cache_max_time_s: 1.

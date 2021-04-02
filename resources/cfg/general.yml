@@ -1,0 +1,46 @@
+APPLICATION_NAME: "WETTest"
+PYTHON_VERSION: !!python/tuple [ 3, 7 ]
+POLLING_INTERVAL_MS: 50
+IS_ALIVE_POLLING_INTERVAL_MS: 1000
+
+resolutions:
+  small: &small !!python/tuple [ 600, 600 ]
+  1080p: &1080p !!python/tuple [ 1920, 1080 ]
+  4k: &4k !!python/tuple [ 3840, 2160 ]
+
+stations:
+  pcreagan-laptop:
+    category: bright
+    enum: bright
+    resolution: *small
+  tm-lview3:
+    category: lighting
+    enum: station1
+    resolution: *1080p
+  tm-lview1:
+    category: lighting
+    enum: station2
+    resolution: *1080p
+  tm-lview2:
+    category: lighting
+    enum: station3
+    resolution: *1080p
+
+tests:
+  lighting:
+    station1:
+      human_readable: PCBA
+      instruments: !!python/tuple [ Daq, BkPowerSupply, Camera ]
+      scan_parsers: !!python/tuple [ DUT, OPTION ]
+    station2:
+      human_readable: Leak
+      instruments: !!python/tuple [ NfcProbe, LeakTester ]
+      scan_parsers: !!python/tuple [ DUT, OPTION ]
+    station3:
+      human_readable: Light
+      instruments: !!python/tuple [ Rs485, BkPowerSupply, LightMeter ]
+      scan_parsers: !!python/tuple [ DUT, OPTION ]
+
+
+LOG_HISTORY_LEN: 1000
+LOG_DISPLAY_UPDATE_INTERVAL_MS: 100

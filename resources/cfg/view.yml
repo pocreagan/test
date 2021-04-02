@@ -1,0 +1,145 @@
+grey:
+  light: &greyscale_light 61
+  medium: &greyscale_medium 42
+  dark: &greyscale_dark 23
+  black: &greyscale_black 0
+
+
+colors:
+  light_grey: &light_grey !!python/tuple [ *greyscale_light, *greyscale_light, *greyscale_light ]
+  medium_grey: &medium_grey !!python/tuple [ *greyscale_medium, *greyscale_medium, *greyscale_medium ]
+  dark_grey: &dark_grey !!python/tuple [ *greyscale_dark, *greyscale_dark, *greyscale_dark ]
+  black: &black !!python/tuple [ *greyscale_black, *greyscale_black, *greyscale_black ]
+  white: &white !!python/tuple [ 255, 255, 255 ]
+  green: &green !!python/tuple [ 25, 135, 25 ]
+  orange: &orange !!python/tuple [ 250, 166, 19 ]
+  red: &red !!python/tuple [ 165, 1, 4 ]
+  blue: &blue !!python/tuple [ 0, 161, 228 ]
+  lime: &lime !!python/tuple [ 209, 239, 181 ]
+
+
+old_colors:
+  background:
+    fresh: light_grey
+    lighter: medium_grey
+    normal: dark_grey
+    darker: black
+  text:
+    normal: white
+  instrument:
+    good: green
+    orange: orange
+    bad: red
+    blue: blue
+    lime: lime
+    checking: white
+  mode:
+    testing: green
+    rework: blue
+    checking: white
+  metrics:
+    percent_text: green
+    fail_text: blue
+    pass_text: green
+    label: white
+
+
+window:
+  padding: 0.01
+  POLLING_INTERVAL_MS: 10
+  FORCE_TOPMOST: true
+  resolution: !!python/tuple [ 1920, 1080 ]
+  font: 430
+  fresh_data_interval_ms: 50
+
+hid:
+  keyboard:
+    re:
+      START_CHAR: "["
+      END_CHAR: "]"
+      KEYPRESS: "(?i)[0-9a-z:\\[\\]|#]"
+      DUT: "(?i)\\[DUT#\\|(\\d{5}):(\\d{8})\\]"
+      OPTION: "(?i)\\[OPT\\|(\\d):(\\d{5}):(\\d{3})\\]"
+    bindings:
+      capture:
+        capture: "<Key>"
+      special_character:
+        paste: "<Control-Key-v>"
+        copy: "<Control-Key-c>"
+        close: "<Control-Key-q>"
+        info: "<Control-Key-i>"
+        test_one: "<Control-Key-t>"
+        test_two: "<Control-Key-y>"
+        ask_save: "<Control-Key-s>"
+        ask_open: "<Control-Key-o>"
+        log: "<Control-Key-l>"
+  mouse:
+    responsiveness:
+      CLICK_SWIPE_THRESHOLD_PX: 40
+      DISTANCE_FROM_RIGHT_ANGLE_DEGREES_ALLOWED: 30
+    bindings:
+      press:
+        press: "<ButtonPress-1>"
+      release:
+        release: "<ButtonRelease-1>"
+      double_click:
+        double_click: "<Double-Button-1>"
+
+
+FONT_SIZE_MULTIPLIER: 1.0
+
+
+font_size:
+  LOGO: 24
+  TESTSTEPS: 24
+  HISTORYPARTNUMBER: 28
+  HISTORYPASSFAIL: 28
+  HISTORYLENGTH: 28
+  HISTORYRECENCY: 28
+  HISTORY: 24
+  INSTRUMENTS: 18
+  TITLEBAR: 18
+  BUILD: 18
+  TIME: 18
+  INSTRUCTION: 24
+  INSTRUCTION_MAJOR: 36
+  INSTRUCTION_MINOR: 24
+  TESTTITLE: 46
+  MODE: 36
+  METRICS: 32
+  CHART: 3
+  LOGGING: 10
+
+
+widget_constants:
+  Logo:
+    filename: wet_logo
+  Mode:
+    strings:
+      testing: "Test"
+      rework: "F.A."
+      checking: "..."
+  History:
+    column_relative_widths: !!python/tuple [ .15, .55 ]
+    glyph_size: .5
+    glyph:
+      pass:
+        bool: true
+        color: *green
+      fail:
+        bool: false
+        color: *blue
+      running:
+        bool: null
+        color: *white
+
+  Metrics:
+    # must be one of [ pass, fail ]
+    pct: pass
+  Time:
+    DT_FORMAT: "%H:%M:%S"
+    UPDATE_INTERVAL_MS: 100
+  Instruction:
+    NOTIFICATION_INTERVAL_MS: 3000
+  Logging:
+    HISTORY_LINE_LEN_MAX: 500
