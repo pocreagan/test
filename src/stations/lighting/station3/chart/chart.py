@@ -9,16 +9,16 @@ from matplotlib.collections import PatchCollection
 from matplotlib.patches import Circle
 from matplotlib.patches import FancyBboxPatch
 
-from framework.model import logger
-from framework.view.chart import colors
-from framework.view.chart import font
-from framework.view.chart import helper
-from framework.view.chart.abstract_widgets import RoundedTextMultiLine
-from framework.view.chart.base import *
-from framework.view.chart.concrete_widgets import ConfigData
-from framework.view.chart.concrete_widgets import TestStatus
-from framework.view.chart.concrete_widgets import UnitInfo
-from lighting.LL3.chart import messages
+from src.base.log import logger
+from src.view.chart import colors
+from src.view.chart import font
+from src.view.chart import helper
+from src.view.chart.abstract_widgets import RoundedTextMultiLine
+from src.view.chart.base import *
+from src.view.chart.concrete_widgets import ConfigData
+from src.view.chart.concrete_widgets import TestStatus
+from src.view.chart.concrete_widgets import UnitInfo
+from src.stations.lighting.station3.chart import messages
 
 log = logger(__name__)
 
@@ -178,7 +178,7 @@ class BarChart(Region):
         helper.clear_garbage(self.ax)
         self.ax.set_xlim(-1.5, 1.5)
 
-    def _scale(self, num_channels: int) -> tuple[int, float]:
+    def _scale(self, num_channels: int) -> Tuple[int, float]:
         y_max = 3 * num_channels
         pad_out = (THERM_XI / 1.2) * y_max * 2
         self.ax.set_ylim(-pad_out, y_max + pad_out)
@@ -247,7 +247,7 @@ class WhiteCalculations(RoundedTextMultiLine):
         helper.clear_garbage(self.ax)
 
     @property
-    def spec(self) -> list[str]:
+    def spec(self) -> List[str]:
         return [
             r'$ CCT $',
             r'$ Duv $',
@@ -292,7 +292,7 @@ class ChannelInfo(RoundedTextMultiLine):
         return (0.5 + (self.scaling_factor_y / 2)) - ((self.scaling_factor_y / 3) * i)
 
     @property
-    def spec(self) -> list[str]:
+    def spec(self) -> List[str]:
         params = self.params[self.config['channel_name']]
         spec = [
             r'$ dist < %.3f $' % (params['color_point']['dist']),
@@ -350,11 +350,11 @@ class BigChart(Region):
 
 INFO_BOX = Union[ChannelInfo, WhiteCalculations]
 INFO_BOX_T = Type[INFO_BOX]
-CALC_RESULT = tuple[float, bool]
+CALC_RESULT = Tuple[float, bool]
 
 
 class Plot(Root):
-    def _add_info_box(self, top: int, cla: INFO_BOX_T, name: str) -> tuple[int, INFO_BOX]:
+    def _add_info_box(self, top: int, cla: INFO_BOX_T, name: str) -> Tuple[int, INFO_BOX]:
         bottom = top + 16
         return bottom, cla(self, self.fig.add_subplot(self.gs[top:bottom, 90:125]), channel_name=name)
 
@@ -421,7 +421,8 @@ class Plot(Root):
 
     @update.register
     def _(self, msg: messages.Thermal_Measurement) -> None:
-        if drop := self.big_chart.thermal.set_result(msg.string_dmx, msg.fcd):
+        drop = self.big_chart.thermal.set_result(msg.string_dmx, msg.fcd)
+        if drop:
             self._add_result(msg.string_dmx, 'drop', drop * 100)
 
     @update.register
