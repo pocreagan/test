@@ -6,13 +6,13 @@ from typing import *
 import PIL
 from PIL import ImageTk
 
-from framework.base.concurrency import ChildTerminus
-from framework.base.general import do_if_not_done
-from framework.base.load import tuple_to_hex_color
-from framework.model import *
-from framework.view.base import component
-from framework.view.base.window import Window
-from framework.view.base.placement import Category
+from src.base.concurrency.concurrency import ChildTerminus
+from src.base.general import do_if_not_done
+from src.base.load import tuple_to_hex_color
+from src.base.log import logger
+from src.view.base import component
+from src.view.base.window import Window
+from src.view.base.placement import Category
 
 __all__ = [
     'Cell',
@@ -34,7 +34,7 @@ class Cell(ChildTerminus, tk.Frame):
     _enable_state_vars = {True: (APP.V.COLORS.background.lighter, 'enabled'),
                           False: (APP.V.COLORS.background.normal, 'disabled'), }
     _fresh_interval_ms: int = APP.V.window['fresh_data_interval_ms']
-    _fresh_sequence: list[str] = [
+    _fresh_sequence: List[str] = [
         tuple_to_hex_color((v, v, v)) for v in range(APP.V.grey['light'], APP.V.grey['medium'], -1)
     ]
     category: Category
@@ -42,7 +42,8 @@ class Cell(ChildTerminus, tk.Frame):
     @property
     def font(self) -> tk.font.Font:
         if not self.__font:
-            if f := getattr(APP.V.FONTSIZE, self.__class__.__name__.upper(), None):
+            f = getattr(APP.V.FONTSIZE, self.__class__.__name__.upper(), None)
+            if f:
                 self.__font = self._make_font(f)
             else:
                 self.__font = self.parent.font.tk_font
@@ -115,7 +116,8 @@ class Cell(ChildTerminus, tk.Frame):
         """
         if a Cell exists in the same position, removes it
         """
-        if previous_widget := self.parent.widgets_by_position.get(self.pos, None):
+        previous_widget = self.parent.widgets_by_position.get(self.pos, None)
+        if previous_widget:
             previous_widget.hide()
 
     def _before_show(self) -> None:
@@ -251,7 +253,8 @@ class Cell(ChildTerminus, tk.Frame):
         pack new child widget to fill entire frame
         return child widget
         """
-        if existing := getattr(self, name, None):
+        existing = getattr(self, name, None)
+        if existing:
             for method in ['forget', 'pack_forget', 'destroy']:
                 # SUPPRESS-LINTER <don't care if this fails>
                 # noinspection PyBroadException
@@ -277,7 +280,7 @@ class Cell(ChildTerminus, tk.Frame):
         return Font(family=family or self.parent.font.name, size=size)
 
     @staticmethod
-    def _make_image(fp: Union[Path, str], dimensions_in_pixels: tuple[int, ...] = None) -> ImageTk.PhotoImage:
+    def _make_image(fp: Union[Path, str], dimensions_in_pixels: Tuple[int, ...] = None) -> ImageTk.PhotoImage:
         """
         take filepath from ini
         resize if necessary

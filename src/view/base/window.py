@@ -1,12 +1,12 @@
 import tkinter as tk
-from typing import Optional
+from typing import List
 
-from framework.base.log import logger
-from framework.base.message import *
-from framework.model import APP
-from framework.view.base.human_input import HID
-from framework.view.base.placement import *
-from framework.view.base.system import *
+from src.base.concurrency.message import *
+from src.base.log import logger
+from src.model import APP
+from src.view.base.human_input import HID
+from src.view.base.placement import *
+from src.view.base.system import *
 
 __all__ = [
     'Window',
@@ -18,7 +18,7 @@ log = logger(__name__)
 class MockLogDeque:
     new: bool = False
 
-    def get(self) -> list[str]:
+    def get(self) -> List[str]:
         raise NotImplementedError
 
 
@@ -123,7 +123,8 @@ class Window(tk.Tk):
         instance = widget.widget(widget.name, self, *widget.pos)
         setattr(self, widget.name, instance)
 
-        if category := self.categories.get(widget.pos, None):
+        category = self.categories.get(widget.pos, None)
+        if category:
             category.add(instance)
             log.debug(f'widget <{widget.name}> added to category <{category.name}>')
 
@@ -214,7 +215,8 @@ class Window(tk.Tk):
         possible Window methods are defined in view.yml
         else passes the action to the controller and returns
         """
-        if method := getattr(self, msg.f, None):
+        method = getattr(self, msg.f, None)
+        if method:
             with self.hid:
                 if method(*msg.args) is not False:
                     return log.info(f'Window handled {msg}')

@@ -281,7 +281,7 @@ class _ProxyServer(Thread, _SyncMixin):
         """
         if self._scheduled_tasks:
             return max((self._next_task_t - time()) - .001, 0.)
-            # " - .002" is a fudge factor to keep the poll loop tight
+            # " - .001" is a fudge factor to keep the poll loop tight
             #     when a task is approximately scheduled to start
 
     def __pick_scheduled_task(self) -> Optional[Task]:

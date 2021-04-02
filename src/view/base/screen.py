@@ -3,7 +3,7 @@ import tkinter
 
 import win32api
 
-from framework.model import *
+from src.base.log import logger
 
 __all__ = [
     'Screen',

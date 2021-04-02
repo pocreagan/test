@@ -1,13 +1,14 @@
 from datetime import datetime
+from typing import List
 
 import matplotlib.pyplot as plt
 from matplotlib.patches import FancyBboxPatch
 
-from framework.model import logger
-from framework.view.chart import font
-from framework.view.chart import helper
-from framework.view.chart.abstract_widgets import RoundedTextOneLine
-from framework.view.chart.base import *
+from src.base.log import logger
+from src.view.chart import font
+from src.view.chart import helper
+from src.view.chart.abstract_widgets import RoundedTextOneLine
+from src.view.chart.base import *
 
 log = logger(__name__)
 
@@ -67,7 +68,7 @@ class ConfigData(Region):
             )
         )
 
-    def set_result(self, config_items: list[str]) -> None:
+    def set_result(self, config_items: List[str]) -> None:
         _data = '\n'.join(config_items)
         self.artists['config_data'].set_text(_data)
 

@@ -10,8 +10,8 @@ from matplotlib import cbook
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.image import FigureImage
 
-from framework.model import logger
-from framework.view.chart.helper import timer
+from src.base.log import logger
+from src.view.chart.helper import timer
 
 log = logger(__name__)
 
@@ -58,7 +58,8 @@ class Widget:
         """
         getattr(self, f'_{f}')()
         [getattr(child, f)() for child in self.children]
-        if method := getattr(self, f'_{f}_after', None):
+        method = getattr(self, f'_{f}_after', None)
+        if callable(method):
             method()
 
     def _set_background(self) -> None:
@@ -144,7 +145,7 @@ class Root(Widget):
         self.reset_results()
         self._bg = self._bg or self.canvas.copy_from_bbox(self.canvas.figure.bbox)
 
-    def __call__(self, iteration_data: list[ITERATION_DATA]):
+    def __call__(self, iteration_data: List[ITERATION_DATA]):
         list(map(self.update, iteration_data))
         self.canvas.restore_region(self._bg)
         list(map(self.canvas.figure.draw_artist, self.animated))

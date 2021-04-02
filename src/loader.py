@@ -10,7 +10,7 @@ import PIL.Image
 import PIL.ImageTk
 import win32api
 
-from framework.model import logger, APP
+from src.base.log import logger
 
 log = logger(__name__)
 

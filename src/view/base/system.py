@@ -8,8 +8,8 @@ from typing import *
 import win32api
 from fontTools import ttLib
 
-from framework.base.load import lazy_access
-from framework.model import *
+from src.base.load import lazy_access
+from src.base.log import logger
 
 __all__ = [
     'Screen',

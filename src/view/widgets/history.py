@@ -6,12 +6,12 @@ from dataclasses import dataclass
 from functools import partial
 from typing import *
 
-from framework.model import *
-from framework.view.base.cell import *
-from framework.view.base.component import Label
-from framework.view.base.helper import with_enabled
-from framework.view.base.image_funcs import make_circle_glyph
-from framework.view.base.component import Scrollbar
+from src.base.log import logger
+from src.view.base.cell import *
+from src.view.base.component import Label
+from src.view.base.helper import with_enabled
+from src.view.base.image_funcs import make_circle_glyph
+from src.view.base.component import Scrollbar
 
 __all__ = [
     'Mode',
@@ -26,10 +26,10 @@ __all__ = [
 
 log = logger(__name__)
 
-_RECORD = dict[str, [int, bool, datetime.datetime, str, str]]
-_RECORDS = list[_RECORD]
-_RECORD_DICT = dict[int, _RECORD]
-_RECORD_ID_SET = set[int]
+_RECORD = Dict[str, [int, bool, datetime.datetime, str, str]]
+_RECORDS = List[_RECORD]
+_RECORD_DICT = Dict[int, _RECORD]
+_RECORD_ID_SET = Set[int]
 
 
 class Mode(Cell):
@@ -43,7 +43,7 @@ class Mode(Cell):
         one instance of Setting corresponds to one button state
         """
         display_s: str
-        config_d: dict[str, Any]
+        config_d: Dict[str, Any]
         next: Optional[str] = None
 
     state: str
@@ -54,7 +54,7 @@ class Mode(Cell):
 
     def __post_init__(self):
         self.object: Label = self._load(Label(self))
-        self._settings: dict[str, 'Mode.Setting'] = {s: self.Setting(
+        self._settings: Dict[str, 'Mode.Setting'] = {s: self.Setting(
             self.constants['strings'][s], dict(fg=getattr(APP.V.COLORS.mode, s)), next=_next
         ) for s, _next in zip([self.checking_str, self.testing_str, self.rework_str],
                               [None, self.rework_str, self.testing_str])}
@@ -112,7 +112,7 @@ class Metrics(Cell):
     """
     shows pass/fail statistics for one station
     """
-    _numbers: tuple[int, int, int, int]
+    _numbers: Tuple[int, int, int, int]
 
     def __post_init__(self):
         names = ['percent_text', 'fail_text', 'pass_text', 'label', ]
@@ -166,7 +166,8 @@ class Metrics(Cell):
         does not perform tk action if args == last setting for that function and row
         """
         k = f, row
-        if _last := self._last_settings.get(k, None):
+        _last = self._last_settings.get(k, None)
+        if _last:
             if _last == args:
                 return
         [getattr(getattr(self, f'{name}_{row}'), f)(v) for name, v in zip(self._names, args)]
@@ -314,7 +315,8 @@ class History(Cell):
             self._model_ids[record['mn']].add(id_)
 
             # most recent result for this sn
-            if (v := self._day_sns.setdefault(sn_, (id_, dt_)))[1] < dt_:
+            v = self._day_sns.setdefault(sn_, (id_, dt_))
+            if v[1] < dt_:
                 self._day_sns[sn_] = v
                 self._last_results_fresh = True
 
@@ -389,6 +391,7 @@ class History(Cell):
                 self.update()
 
     def pack_forget_widget(self, widget) -> None:
+        _ = self
         try:
             widget.pack_forget()
         except Exception as e:
@@ -520,7 +523,8 @@ class History(Cell):
         if double click lands on a button (history entry), invoke it
         """
         _button = evt.widget  # type: ignore
-        if invoke := getattr(_button, 'invoke', None):
+        invoke = getattr(_button, 'invoke', None)
+        if invoke:
             with_enabled(_button)(invoke)()
 
 
@@ -528,15 +532,15 @@ class _HistorySelect(Cell):
     """
     acts as a button, toggling between dut history filter selections
     """
-    _settings: dict[str, str]
+    _settings: Dict[str, str]
     initial_setting: str
     _history_attr: str
-    _all_options: list[str]
+    _all_options: List[str]
     _next_index: int
 
     def __post_init__(self) -> None:
         self._label: Label = self._load(Label(self))
-        self._all_options: list[str] = [self.initial_setting]
+        self._all_options: List[str] = [self.initial_setting]
         self._next_index: int = 0
         self.current_option: str = self.initial_setting
 
@@ -569,7 +573,7 @@ class _HistorySelect(Cell):
         setattr(_history, self._history_attr, self.current_option)
         _history.filter_and_update()
 
-    def set_options(self, options: list[str]) -> None:
+    def set_options(self, options: List[str]) -> None:
         """
         set non-initial settings from the History widget after populating initial history
         """

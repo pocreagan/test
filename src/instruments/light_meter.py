@@ -1,19 +1,26 @@
 import ctypes
+from collections import deque
 from ctypes import c_char_p
 from ctypes import c_int16
 from ctypes import c_int32
 from ctypes import c_int8
 from dataclasses import dataclass
 from dataclasses import fields
+from datetime import datetime
 from functools import lru_cache
 from operator import attrgetter
+from operator import itemgetter
 from pathlib import Path
 from statistics import mean
 from time import perf_counter
 from typing import Callable
 from typing import cast
+from typing import Deque
 from typing import Dict
 from typing import Iterable
+from typing import List
+from typing import Optional
+from typing import Tuple
 
 from src.base.actor import configuration
 from src.base.actor import proxy
@@ -26,12 +33,19 @@ from src.instruments.base.instrument import InstrumentError
 __all__ = [
     'LightMeter',
     'LightMeasurement',
+    'ThermalDropSample',
     'LightMeterError',
 ]
 
 
 class LightMeterError(InstrumentError):
     pass
+
+
+@dataclass
+class ThermalDropSample:
+    fcd: float
+    te: float
 
 
 @dataclass
@@ -208,6 +222,53 @@ class LightMeter(Instrument):
             return meas
         except OSError as e:
             raise LightMeterError('failed to measure') from e
+
+    @proxy.exposed
+    def thermal_drop(self, threshold: float, duration: float, timeout: float,
+                     consumer: Callable = None) -> Tuple[LightMeasurement, LightMeasurement]:
+
+        consumer = consumer if callable(consumer) else self.info
+
+        first_t, tf = None, None
+        rolling_meas: Deque[Tuple[LightMeasurement, datetime]] = deque(maxlen=4)
+
+        first_meas = last_meas = meas = self.measure()
+        _now = datetime.now()
+        [rolling_meas.append((meas, _now)) for _ in range(4)]
+        _timeout = perf_counter() + timeout
+        while 1:
+            if tf is None:
+                if meas.fcd < last_meas.fcd and last_meas.fcd > threshold:
+                    tf = perf_counter() + duration
+
+                else:
+                    last_meas = meas
+                    if perf_counter() > _timeout:
+                        raise LightMeterError('thermal illuminance ramp timeout reached')
+
+            if tf is not None:
+                if first_t is None:
+                    averaged_meas, _t = rolling_meas[-2]  # type: LightMeasurement, datetime
+                    first_t = _t
+                    first_meas = averaged_meas
+
+                else:
+                    # noinspection PyTypeChecker
+                    to_be_averaged: List[LightMeasurement] = [
+                        item[0] for i, item in enumerate(rolling_meas) if i
+                    ]
+                    averaged_meas = LightMeasurement.averaged_from(to_be_averaged)
+                    _t = rolling_meas[2][1]
+
+                consumer(ThermalDropSample(
+                    fcd=averaged_meas.fcd, te=(_t - first_t).total_seconds()
+                ))
+
+                if perf_counter() > tf:
+                    return first_meas, averaged_meas
+
+            meas: LightMeasurement = self.measure()
+            rolling_meas.append((meas, datetime.now()))
 
     @proxy.exposed
     def calibrate(self, consumer: Callable = None) -> None:

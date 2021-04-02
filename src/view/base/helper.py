@@ -34,7 +34,7 @@ class File:
         extension: str
 
         @property
-        def tuple(self) -> tuple[str, str]:
+        def tuple(self) -> Tuple[str, str]:
             return f'.{self.extension}', f'*.{self.extension}'
 
     XLS = FileType('xls')
@@ -43,11 +43,10 @@ class File:
     ALL = FileType('*')
 
     @staticmethod
-    def _get_file(f, title: str, directory: str, *file_types) -> str:
-        _types: tuple[File.FileType] = file_types
+    def _get_file(f, title: str, directory: str, *file_types: 'File.FileType') -> str:
         return f(initialdir=directory,
                  title=title,
-                 filetypes=tuple(ft.tuple for ft in _types)).name
+                 filetypes=tuple(ft.tuple for ft in file_types)).name
 
     @classmethod
     def open(cls, title: str, directory: str, *file_types) -> str:

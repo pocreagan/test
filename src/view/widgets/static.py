@@ -1,8 +1,8 @@
 import datetime
 from typing import *
 
-from framework.model import *
-from framework.view.base.cell import *
+from src.base.log import logger
+from src.view.base.cell import *
 
 __all__ = [
     'TestTitle',

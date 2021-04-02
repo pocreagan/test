@@ -110,8 +110,8 @@ class Relationship:
         # noinspection PyCallByClass
         return Relationship._TwoWayRelationship(
             parent=relationship(child_table, back_populates=child_col, lazy='select',
-                                cascade='all, delete-orphan', single_parent=True),
-            child=relationship(parent_table, back_populates=parent_col, lazy='select')
+                                cascade='all, delete-orphan', single_parent=True, enable_typechecks=False),
+            child=relationship(parent_table, back_populates=parent_col, lazy='select', enable_typechecks=False)
         )
 
     @staticmethod
@@ -123,21 +123,22 @@ class Relationship:
         # noinspection PyCallByClass
         return Relationship._TwoWayRelationship(
             parent=relationship(child_table, back_populates=child_col, uselist=False, lazy='select',
-                                cascade='all, delete-orphan', single_parent=True),
-            child=relationship(parent_table, back_populates=parent_col, lazy='select')
+                                cascade='all, delete-orphan', single_parent=True, enable_typechecks=False),
+            child=relationship(parent_table, back_populates=parent_col, lazy='select', enable_typechecks=False)
         )
 
     @staticmethod
     def association(schema: DeclarativeMeta,
                     first_t: str, first_c: str, second_t: str, second_c: str) -> _TwoWayRelationship:
+        # noinspection PyUnresolvedReferences
         table = sa.Table(
             f'association_{first_t}_{second_t}', schema.metadata,
             sa.Column(f'{first_t}_id', sa.Integer, sa.ForeignKey(f'{first_t}.id')),
             sa.Column(f'{second_t}_id', sa.Integer, sa.ForeignKey(f'{second_t}.id'))
         )
         return Relationship._TwoWayRelationship(
-            parent=relationship(second_t, secondary=table, back_populates=second_c),
-            child=relationship(first_t, secondary=table, back_populates=first_c),
+            parent=relationship(second_t, secondary=table, back_populates=second_c, enable_typechecks=False),
+            child=relationship(first_t, secondary=table, back_populates=first_c, enable_typechecks=False),
         )
 
     @staticmethod
@@ -146,7 +147,7 @@ class Relationship:
         use only when left outer join is not needed
         use when lazy loading is acceptable
         """
-        return relationship(other, lazy='select', innerjoin=True)
+        return relationship(other, lazy='select', innerjoin=True, enable_typechecks=False)
 
     @staticmethod
     def last_modified():

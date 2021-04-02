@@ -299,8 +299,15 @@ class FTDI:
     def write(self, data: bytes) -> int:
         self.delay_for(0.)
         _t_per_byte = self._word_length / self.baudrate
-        for chunk in chunks(64, data):
-            with TimerContext(len(chunk) * _t_per_byte):
+        _chunks = list(chunks(64, data))
+        num_chunks = len(_chunks)
+        for i, chunk in enumerate(_chunks):
+            chunk_t = len(chunk) * _t_per_byte
+            if (i + 1) != num_chunks:
+                with TimerContext(chunk_t):
+                    self.interface.write(chunk)
+            else:
+                self.next_tx = time() + self.instrument.TX_WAIT_S + chunk_t
                 self.interface.write(chunk)
         return len(data)
 
@@ -308,6 +315,7 @@ class FTDI:
     def read(self, num_bytes: int) -> bytes:
         self.delay_for(0.)
         rx = self.interface.read(num_bytes, raw=True)
+        # self.next_tx = time() + self.instrument.TX_WAIT_S
         self.instrument.debug(f'rx -> {rx}')
         return rx
 
@@ -384,8 +392,6 @@ class FTDI:
             self.reset_input_buffer()
         self.write(data)
         self.instrument.debug(f'tx -> {data}')
-        self.flush()  # TODO: test to see if this helps anything
-        self.next_tx = time() + self.instrument.TX_WAIT_S
 
     def send_ascii(self, data: str) -> None:
         with self.baud(9600):

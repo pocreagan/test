@@ -10,7 +10,7 @@ from matplotlib.patches import FancyBboxPatch
 from matplotlib.transforms import Bbox
 from PIL import Image
 
-from framework.model import logger
+from src.base.log import logger
 
 __all__ = [
     'make_info_box',
@@ -43,7 +43,7 @@ def make_info_box(corner: float = CORNER, pad_in: float = PAD_IN, **kwargs) -> F
     )
 
 
-def make_bounds(ax, colors, lines: list[list[tuple[float, ...]]]):
+def make_bounds(ax, colors, lines: List[List[Tuple[float, ...]]]):
     return ax.add_collection(LineCollection(lines, color=colors, lw=1, zorder=-1,
                                             alpha=0.5, linestyle='dashed', dashes=(0, (5, 5))))
 

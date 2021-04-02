@@ -4,14 +4,14 @@ from functools import partial
 from tkinter import font
 from typing import *
 
-from framework.base.general import truncate
-from framework.base.load import dynamic_import
-from framework.model import *
-from framework.model.enums import MouseAction
-from framework.view.base.cell import *
-from framework.view.base.component import *
-from framework.view.base.helper import with_enabled
-from framework.view.base.component import StepProgress
+from src.base.log import logger
+from src.base.general import truncate
+from src.base.load import dynamic_import
+from src.model.enums import MouseAction
+from src.view.base.cell import *
+from src.view.base.component import *
+from src.view.base.helper import with_enabled
+from src.view.base.component import StepProgress
 
 __all__ = [
     'TestSteps',
@@ -69,7 +69,8 @@ class Logging(Cell):
         self._length += len(lines)
 
         # remove stale lines if any
-        if stale := max(0, self._length - self._max_length):
+        stale = max(0, self._length - self._max_length)
+        if stale:
             self.text.delete(1.0, float(stale + 1))
             self._length -= stale
 
@@ -122,7 +123,7 @@ class Instruments(Cell):
         _instruments = [inst for inst in APP.STATION.instruments]
         _spot = 1 / len(_instruments)
         _instruments.sort()
-        self.instruments: dict[str, 'Instruments.Instrument'] = dict()
+        self.instruments: Dict[str, 'Instruments.Instrument'] = dict()
         for i, s in enumerate(_instruments):
             label = Label(self, anchor="center", font=self.font,
                           fg=getattr(APP.V.COLORS.instrument, 'checking', 'bad'),
@@ -170,7 +171,7 @@ class Instruction(Cell):
     major and minor sub_widgets are handled together
     """
 
-    last_settings: tuple[str, str, Any]
+    last_settings: Tuple[str, str, Any]
 
     def initial_state(self) -> None:
         self.set('-', '')
@@ -182,7 +183,7 @@ class Instruction(Cell):
         self.major: Label = self._load(Label(self, font=_maj), 'major_widget')
         self.minor: Message = self._load(Message(self, justify='center', font=_min,
                                                  width=int(self.w_co * 0.9)), 'minor_widget')
-        self.subs: list[Label] = [self.major, self.minor]
+        self.subs: List[Label] = [self.major, self.minor]
         self.last_settings = '', '', None
         self.disable()
 
@@ -229,9 +230,9 @@ class TestSteps(Cell):
     show test step progress as it happens
     """
     # TODO: this
-    step_frames: dict[str, StepProgress] = dict()
+    step_frames: Dict[str, StepProgress] = dict()
 
-    def make_steps(self, steps: dict[str, int]) -> None:
+    def make_steps(self, steps: Dict[str, int]) -> None:
         log.info('making steps')
         for i, (name, max_val) in enumerate(steps.items()):
             self.step_frames[name] = widget = StepProgress(self, name, max_val, 66)

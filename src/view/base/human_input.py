@@ -4,12 +4,11 @@ import tkinter as tk
 from functools import partial
 from typing import *
 
-from framework.base import message
-from framework.base.general import call
-from framework.base.general import do_if_not_done
-from framework.base.log import logger
-from framework.model import APP
-from framework.model.enums import MouseAction
+from src.base.concurrency import message
+from src.base.general import call
+from src.base.general import do_if_not_done
+from src.base.log import logger
+from src.model.enums import MouseAction
 
 __all__ = [
     'HID',
@@ -20,7 +19,7 @@ log = logger(__name__)
 
 
 class Binding:
-    parent_methods: set[str] = None
+    parent_methods: Set[str] = None
 
     def check_parent(self):
         """
@@ -37,7 +36,7 @@ class Binding:
         self.parent = parent
         self.check_parent()
         self.constants = APP.V.hid.get(self.name.lower())
-        self.bindings: dict[str, dict[str, str]] = self.constants['bindings']
+        self.bindings: Dict[str, Dict[str, str]] = self.constants['bindings']
         self.__post_init__()
         self._active = True
         self.bind()
@@ -115,7 +114,7 @@ class Keyboard(Binding):
         special_character_d = self.bindings['special_character']
         self.special_keys = {special_k_re.findall(v)[0]: k for k, v in special_character_d.items()}
 
-        self.parse_funcs: list[tuple[re.Pattern, str]] = []
+        self.parse_funcs: List[Tuple[re.Pattern, str]] = []
         for k in APP.STATION.scan_parsers:
             # compile ini regex and map to method name, ex: ..., 'dut_scan'
             f, _re = f'{k.lower()}_scan', APP.V.hid['keyboard']['re'][k]
@@ -134,7 +133,8 @@ class Keyboard(Binding):
         else pass up to Window for handling
         """
         self.clear()
-        if method := getattr(self, f, None):
+        method = getattr(self, f, None)
+        if method:
             method(*args)
         else:
             self.parent.handle_keyboard_action(message.KeyboardAction(f, *args))
@@ -144,7 +144,8 @@ class Keyboard(Binding):
         try each parser defined by station and handle first match
         """
         for pattern, f in self.parse_funcs:
-            if parsed := pattern.findall(s):
+            parsed = pattern.findall(s)
+            if parsed:
                 return self.handle(f, *parsed[0])
 
     # bound methods
@@ -189,7 +190,7 @@ class Mouse(Binding):
     """
     _release_methods = ['click', 'drag_h', 'drag_v']
     press_event: Optional[tk.EventType] = None
-    co_dimensions: Optional[tuple[tuple[int, ...], ...]] = None
+    co_dimensions: Optional[Tuple[Tuple[int, ...], ...]] = None
     parent_methods = {
         'update',
         'winfo_rootx',
@@ -204,7 +205,7 @@ class Mouse(Binding):
     _drag_sq = _drag ** 2
     __fudge = __responsiveness['DISTANCE_FROM_RIGHT_ANGLE_DEGREES_ALLOWED']
 
-    _directions: dict[int, MouseAction] = dict()
+    _directions: Dict[int, MouseAction] = dict()
     for deg in range(-180, 181):
         for _min, _max, direction in ((-__fudge, __fudge, MouseAction.RIGHT),
                                       (-180, -(180 - __fudge), MouseAction.LEFT),
@@ -226,7 +227,8 @@ class Mouse(Binding):
         return the widget
         """
         if self._active and evt.widget:
-            if (cell := evt.widget.master) is not None:
+            cell = evt.widget.master
+            if cell is not None:
                 if getattr(cell, 'is_enabled', False):
                     return cell
 
@@ -235,7 +237,8 @@ class Mouse(Binding):
         """
         handles every press event, including the first and second in a double click
         """
-        if _cell := self.validate(evt):
+        _cell = self.validate(evt)
+        if _cell:
             # persist the event for other handlers
             self.press_event = evt
 
@@ -253,7 +256,8 @@ class Mouse(Binding):
         pass double click event to cell if handler is defined
         disregards initial press state
         """
-        if cell := self.validate(evt):
+        cell = self.validate(evt)
+        if cell:
             call(cell, 'double_click', evt)
         self.clear()
 
@@ -264,7 +268,8 @@ class Mouse(Binding):
         secondary events should only proceed if initial state has been set
         returns target cell widget
         """
-        if _cell := self.press_event:
+        _cell = self.press_event
+        if _cell:
             if self._active:
                 return _cell.widget.master
             self.clear()
@@ -287,7 +292,8 @@ class Mouse(Binding):
         handle if all conditions are met by press - release pair
         clear state regardless
         """
-        if cell := self.initial_target:
+        cell = self.initial_target
+        if cell:
 
             click, drag_h, drag_v = [getattr(cell, k, None) for k in self._release_methods]
 
@@ -304,7 +310,8 @@ class Mouse(Binding):
                         if drag_h or drag_v:
 
                             # if mouse traveled far enough, determines drag angle
-                            if _d := self._directions.get(int(math.degrees(math.atan2(dy, dx))), None):
+                            _d = self._directions.get(int(math.degrees(math.atan2(dy, dx))), None)
+                            if _d:
                                 # if drag angle sufficiently vertical or horizontal, handles drag
                                 # by direction in cell
                                 _dir = _d.direction

@@ -1,9 +1,11 @@
+from typing import List
+
 import matplotlib.pyplot as plt
 from matplotlib.patches import FancyBboxPatch
 from matplotlib.transforms import Bbox
 
-from framework.model import logger
-from framework.view.chart.base import Region
+from src.base.log import logger
+from src.view.chart.base import Region
 
 log = logger(__name__)
 
@@ -80,13 +82,13 @@ class RoundedTextOneLine(RoundedText):
 
 class RoundedTextMultiLine(RoundedText):
     scaling_factor_y: float
-    names: list[str]
+    names: List[str]
 
-    x_values: list[float]
-    color_values: list[str]
-    fonts: list
-    alphas: list[float]
-    horizontal_justifications: list[str]
+    x_values: List[float]
+    color_values: List[str]
+    fonts: List
+    alphas: List[float]
+    horizontal_justifications: List[str]
 
     def axis_manipulation(self) -> None:
         pass
@@ -102,7 +104,7 @@ class RoundedTextMultiLine(RoundedText):
         raise NotImplementedError
 
     @property
-    def spec(self) -> list[str]:
+    def spec(self) -> List[str]:
         raise NotImplementedError
 
     def __post_init__(self) -> None:

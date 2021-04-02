@@ -6,6 +6,7 @@ from src.instruments.dc_power_supplies import DCLevel
 __all__ = [
     'ConnectionStateCalcType',
     'LightLineV1ConnectionState',
+    'ConnectionState',
 ]
 
 

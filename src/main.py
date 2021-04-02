@@ -9,8 +9,8 @@ def hidden_imports() -> None:
     explicit import statements needed in main.py for binary build module discovery
     importing in function scope to prevent unnecessary imports on controller spawn
     """
-    from src.framework import view
-    import src.framework.view.chart.concrete_widgets
+    from src import view
+    import src.view.chart.concrete_widgets
     from src.lighting.LL2 import chart as c2
     from src.lighting.LL2 import controller as con2
     from src.lighting.LL2 import view as v2

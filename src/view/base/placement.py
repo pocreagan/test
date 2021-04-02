@@ -45,7 +45,7 @@ class Pos:
         return self.y + self.h
 
     @property
-    def tuple(self) -> tuple[float, ...]:
+    def tuple(self) -> Tuple[float, ...]:
         """
         returns underlying relative values
         """
@@ -58,7 +58,7 @@ class WidgetPosition:
     bundles a position with a widget
     """
     widget: Any
-    pos: Union[Pos, tuple[float, ...]]
+    pos: Union[Pos, Tuple[float, ...]]
     name: Optional[str] = None
 
     def __post_init__(self):
@@ -73,7 +73,7 @@ class Category:
     transformed at runtime
     """
     name: str
-    widgets: Optional[dict[int, Any]] = None
+    widgets: Optional[Dict[int, Any]] = None
     showing: int = 0
 
     def __post_init__(self):
@@ -94,7 +94,8 @@ class Category:
         returns False if one widget in category to indicate that no action was taken
         else shows next widget in category
         """
-        if _mod := len(cast(dict, self.widgets)):
+        _mod = len(cast(dict, self.widgets))
+        if _mod:
             self.showing = (self.showing + (1 if forward else -1)) % _mod
             self.widgets[self.showing].show()
         else:

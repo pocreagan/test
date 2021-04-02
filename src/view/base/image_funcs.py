@@ -1,8 +1,8 @@
 import tempfile
 from pathlib import Path
+from typing import Tuple
 
-from framework.base.log import logger
-from framework.model import APP
+from src.base.log import logger
 
 # import cv2
 # import numpy as np
@@ -19,7 +19,7 @@ __all__ = [
 log = logger(__name__)
 
 
-def make_circle_glyph(size, rel_radius: float, color_rgb: tuple[int, ...]):
+def make_circle_glyph(size, rel_radius: float, color_rgb: Tuple[int, ...]):
     fp = APP.R.img(f'glyph-{"-".join(map(str, [size, *color_rgb]))}.png')
     if not APP.R.img(fp).exists():
         import cv2
@@ -76,11 +76,11 @@ def make_square(img, min_size=256, fill_color=(0, 0, 0, 0)):
     return new_im
 
 
-def make_ico(img, filename: str, sizes: tuple[int, ...]):
+def make_ico(img, filename: str, sizes: Tuple[int, ...]):
     img.save(str(APP.R._img(filename + '.ico')), sizes=[(v, v) for v in sizes])
 
 
-def make_icon(sizes: tuple[int, ...] = (255,)):
+def make_icon(sizes: Tuple[int, ...] = (255,)):
     from PIL import Image
 
     make_ico(make_square(Image.open(svg_to_png('wet_logo'))), 'wet_logo', sizes)

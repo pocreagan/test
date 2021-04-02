@@ -29,6 +29,7 @@ from src.instruments.base.instrument import Instrument
 from src.instruments.base.instrument import instrument_debug
 
 __all__ = [
+    'WETCommandError',
     'WETBadResponseError',
     'WETNoResponseError',
     'RS485',
@@ -445,7 +446,7 @@ class RS485(Instrument):
     @proxy.exposed
     def wet_sn_query_any_response(self) -> bool:
         try:
-            self.eeprom_read(*WETCommandRegister.SERIAL_NUMBER, bad_response_attempts=1)
+            _ = self.wet_serial_number()
         except WETNoResponseError:
             return False
         except WETBadResponseError:
@@ -453,9 +454,10 @@ class RS485(Instrument):
         return True
 
     @proxy.exposed
+    @report_result
     def wet_responds_to_sn_query(self) -> bool:
         try:
-            self.eeprom_read(*WETCommandRegister.SERIAL_NUMBER, bad_response_attempts=1)
+            _ = self.wet_serial_number()
         except (WETNoResponseError, WETBadResponseError):
             return False
         else:

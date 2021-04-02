@@ -1,11 +1,11 @@
 import queue
-from typing import Optional, cast, Type
+from typing import Optional
 
-from framework.base.concurrency import *
-from framework.base.log.objects import Handler
-from framework.base.message import *
-from framework.model import *
-from framework.view.base.window import Window
+from src.base.log import logger
+from src.base.concurrency.concurrency import *
+from src.base.concurrency.message import *
+from src.base.log.objects import Handler
+from src.view.base.window import Window
 
 __all__ = [
     'View',
@@ -14,7 +14,7 @@ __all__ = [
 log = logger(__name__)
 
 
-class View(parent_terminus(ViewAction, ControllerAction), Window): # type: ignore
+class View(parent_terminus(ViewAction, ControllerAction), Window):  # type: ignore
     log_deque: Optional[Handler.Deque] = None
 
     def __init__(self, q: ProcessConnection) -> None:

@@ -3,14 +3,15 @@ from functools import wraps
 from tkinter import ttk
 from typing import Callable
 
-from framework.base.general import chain
-from framework.model import *
+from src.base.general import chain
+from src.base.log import logger
 
 __all__ = [
     'Label',
     'Message',
     'Scrollbar',
     'ProgressBar',
+    'StepProgress',
     'Canvas',
 ]
 

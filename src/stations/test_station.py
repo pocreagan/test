@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from itertools import chain
+from time import perf_counter
 from typing import Callable, Dict, Any
 from typing import Generic
 from typing import Optional
@@ -8,14 +9,12 @@ from typing import TypeVar
 
 from typing_extensions import Literal
 
-from model.db.schema import AppConfigUpdate
+from src.model.db.schema import AppConfigUpdate
 from src.base.db.connection import SessionManager
 from src.base.db.connection import SessionType
 from src.base.decorators import configure_class
 from src.base.log.mixin import Logged
 from src.instruments.base import instrument
-from src.model.db.schema import TestIterationProtocol
-from src.model.db.schema import TestStepProtocol
 from src.model.db.schema import YamlFile
 
 __all__ = [
@@ -53,7 +52,7 @@ class DUTIdentityModel:
     option: Optional[str] = None
 
 
-_STEP_MODEL_T = TypeVar('_STEP_MODEL_T', bound=TestStepProtocol)
+_STEP_MODEL_T = TypeVar('_STEP_MODEL_T')
 
 
 class TestStep(Generic[_STEP_MODEL_T]):
@@ -114,15 +113,14 @@ class TestStep(Generic[_STEP_MODEL_T]):
 
 
 class TestStation(instrument.InstrumentHandler, Logged):
-    _iteration_model_cla: Type[TestIterationProtocol]
-
+    model_builder_t: Type
+    model_builder: Any
     session_manager: SessionManager
     unit: DUTIdentityModel
-    model: Type
+    models: Any
+    iteration: Any
     session: SessionType
-    iteration: TestIterationProtocol
     config: Dict[str, Any]
-    config_rev: int
 
     def __init__(self, session_manager: SessionManager,
                  view_emit: Callable = None) -> None:
@@ -132,7 +130,7 @@ class TestStation(instrument.InstrumentHandler, Logged):
             [YamlFile.update_object(session, inst) for inst in chain([self], self.instruments.values())]
             self.config_rev = AppConfigUpdate.get(session).id
         # noinspection PyTypeChecker
-        self.model = self.build_test_model()
+        self.model_builder = self.model_builder_t(self.session_manager)
 
     def test_failure(self, msg) -> Literal[False]:
         self.emit(msg)
@@ -145,33 +143,35 @@ class TestStation(instrument.InstrumentHandler, Logged):
         self._emit('emitted', msg)
         return msg
 
-    def run(self, unit: DUTIdentityModel) -> None:
-        self.unit = unit
+    def on_test_failure(self, e: Exception) -> None:
+        self.emit(str(e))
 
+    def run(self, unit: DUTIdentityModel):
+        self.models = self.model_builder()
+        self.iteration_setup(unit)
         try:
-            with self.session_manager() as session:
-                self.session = session
-                self.iteration = self.session.make(self.get_test_iteration())
-                self.perform_test(unit)
+            self.perform_test()
+
+        except TestFailure as e:
+            self.on_test_failure(e)
 
         except Exception as e:
             raise StationFailure(str(e)) from e
 
-    def get_test_iteration(self) -> TestIterationProtocol:
+        with self.session_manager() as session:
+            session.add(self.iteration)
+
+        return self.iteration
+
+    def iteration_setup(self, unit: DUTIdentityModel):
         """
-        build test iteration model from schema
+        build test iteration model from schema and configs
         """
         raise NotImplementedError
 
-    def perform_test(self, unit: DUTIdentityModel) -> None:
+    def perform_test(self) -> None:
         """
         once DUT and test model have been set, run test steps
-        """
-        raise NotImplementedError
-
-    def build_test_model(self):
-        """
-        build test model from unit identity from database config and params rows
         """
         raise NotImplementedError
 

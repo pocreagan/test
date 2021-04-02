@@ -5,7 +5,6 @@ default factories should be declared in helper.py
 import datetime
 import json
 import re
-import traceback
 from dataclasses import dataclass
 from dataclasses import field
 from operator import attrgetter
@@ -30,7 +29,6 @@ from sqlalchemy.sql.sqltypes import Integer
 from sqlalchemy.sql.sqltypes import LargeBinary
 from sqlalchemy.sql.sqltypes import String
 from sqlalchemy.sql.sqltypes import Text
-from typing_extensions import Protocol
 
 from src.base.actor.configuration import get_configs_on_object
 from src.base.db.connection import SessionType
@@ -47,6 +45,8 @@ __all__ = [
     'EEPROMConfig',
     'EEPROMRegister',
     'EEPROMConfigIteration',
+    'ConfirmUnitIdentityIteration',
+    'LightingStation3Iteration',
     'LightingStation3Param',
     'LightingStation3ParamRow',
     'LightingStation3LightMeasurement',
@@ -55,13 +55,10 @@ __all__ = [
     'PartNumber',
     'Device',
     'Station',
-    'TestStep',
     'Firmware',
     'FirmwareVersion',
     'FirmwareCode',
     'FirmwareIteration',
-    'TestStepProtocol',
-    'TestIterationProtocol',
 ]
 
 db_string = "postgres://postgres:wet_post_evaserv_69@10.40.20.77/postgres"
@@ -93,6 +90,19 @@ class Rel:
 
 Schema: Union[DeclarativeMeta, Type[TableMixin]] = declarative_base_factory('main')
 
+lighting_station3_unit_identity_confirmation_association = Relationship.association(
+    Schema, 'LightingStation3Iteration', 'unit_identity_confirmations',
+    'ConfirmUnitIdentityIteration', 'lighting_station3_iteration',
+)
+lighting_station3_firmware_iteration_association = Relationship.association(
+    Schema, 'LightingStation3Iteration', 'firmware_iterations',
+    'FirmwareIteration', 'lighting_station3_iteration',
+)
+lighting_station3_config_iteration_association = Relationship.association(
+    Schema, 'LightingStation3Iteration', 'config_iterations',
+    'EEPROMConfigIteration', 'lighting_station3_iteration',
+)
+
 
 class AppConfigUpdate(Schema):
     _repr_fields = ['created_at']
@@ -102,8 +112,8 @@ class AppConfigUpdate(Schema):
     @classmethod
     def get(cls, session: SessionType) -> 'AppConfigUpdate':
         return session.query(cls).filter(
-            cls.rev == session.query(func.max(AppConfigUpdate.id)).scalar_subquery()
-        )
+            cls.id == session.query(func.max(AppConfigUpdate.id)).scalar_subquery()
+        ).first()
 
 
 class ConfigFile(Schema):
@@ -272,32 +282,6 @@ class Station(Schema):
     name = Column(String(64), unique=True, nullable=False)
 
 
-class TestStepProtocol(Protocol):
-    p_f: bool
-    error: str
-
-    def exception(self) -> None:
-        """
-        only call this method in an except: clause
-        """
-        self.p_f = False
-        self.error = traceback.format_exc()
-
-
-class TestIterationProtocol(Protocol):
-    dut_id: int
-    p_f: bool
-    steps: List[int]
-
-
-class TestStep(Schema):
-    _repr_fields = ['name', 'success', 'reason']
-    name = Column(String(128), nullable=False)
-    p_f = Column(Boolean)
-    error = Column(Text)
-    # iterations = Rel.stage_to_iterations.parent
-
-
 firmware_association_table = Relationship.association(
     Schema, 'FirmwareVersion', 'code', 'FirmwareCode', 'version'
 )
@@ -350,10 +334,14 @@ class EEPROMConfigIteration(Schema):
     config = Relationship.child_to_parent(EEPROMConfig)
     success = Column(Boolean, default=False)
 
+    lighting_station3_iteration = lighting_station3_config_iteration_association.child
+
 
 class ConfirmUnitIdentityIteration(Schema):
     _repr_fields = ['success', 'created_at', ]
     success = Column(Boolean, default=False)
+
+    lighting_station3_iteration = lighting_station3_unit_identity_confirmation_association.child
 
 
 class FirmwareIteration(Schema):
@@ -363,21 +351,22 @@ class FirmwareIteration(Schema):
     skipped = Column(Boolean, default=False)
     success = Column(Boolean, default=False)
 
-
-class LightingStation3Iteration(Schema):
-    _repr_fields = ['config_iterations', 'firmware_iterations', 'params', 'results']
-    unit_identity_confirmation = ConfirmUnitIdentityIteration.id_fk()
-    firmware_iteration = FirmwareIteration.id_fk()
-    initial_config = EEPROMConfigIteration.id_fk()
-    final_config = EEPROMConfigIteration.id_fk()
-    result_rows = Rel.lighting_station3_iteration_results.parent
-    p_f = Column(Boolean, default=False)
+    lighting_station3_iteration = lighting_station3_firmware_iteration_association.child
 
 
 light_measurement_association_table = Relationship.association(
     Schema, 'LightingStation3ResultRow', 'light_measurements',
     'LightingStation3LightMeasurement', 'result_row'
 )
+
+
+class LightingStation3Iteration(Schema):
+    _repr_fields = ['p_f', 'created_at']
+    unit_identity_confirmations = lighting_station3_unit_identity_confirmation_association.parent
+    firmware_iterations = lighting_station3_firmware_iteration_association.parent
+    config_iterations = lighting_station3_config_iteration_association.parent
+    result_rows = Rel.lighting_station3_iteration_results.parent
+    pf = Column(Boolean, default=False)
 
 
 class LightingStation3ResultRow(Schema):
@@ -400,9 +389,7 @@ class LightingStation3ResultRow(Schema):
     fcd_pf = Column(Boolean, default=False)
     p_pf = Column(Boolean, default=False)
     pct_drop_pf = Column(Boolean, default=False)
-
-    def pf(self) -> bool:
-        return self.cie_pf and self.fcd_pf and self.p_pf and self.pct_drop_pf
+    pf = Column(Boolean, default=False)
 
 
 class LightingStation3LightMeasurement(Schema):
