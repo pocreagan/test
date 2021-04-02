@@ -15,9 +15,9 @@ from pathlib import Path
 from socket import gethostname
 from typing import *
 
-from framework.base.load import *
-from framework.base.log import logger
-from framework.model.enums import Station
+from src.base.load import *
+from src.base.log import logger
+from src.model.enums import Station
 
 __all__ = [
     'APP',
