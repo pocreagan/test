@@ -15,10 +15,14 @@
   "python.testing.pytestArgs": [
     "."
   ],
+  "python.linting.pylintArgs": [
+    "--load-plugins",
+    "pylint_sqlalchemy",
+  ],
   "python.testing.unittestEnabled": false,
   "python.testing.nosetestsEnabled": false,
   "python.testing.pytestEnabled": true,
-  "python.pythonPath": "C:\\Users\\pcreagan\\.virtualenvs\\test_framework-bX_jRMK4\\Scripts\\python.exe",
+  "python.pythonPath": "C:\\Users\\pcreagan\\.virtualenvs\\test-eL7Ayd7H\\Scripts\\python.exe",
   "python.linting.enabled": true,
   "files.autoSaveDelay": 500,
   "files.autoSave": "afterDelay",

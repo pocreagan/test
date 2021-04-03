@@ -1,10 +1,11 @@
-from datetime import datetime
 from typing import List
-
+from PIL import Image
 import matplotlib.pyplot as plt
 from matplotlib.patches import FancyBboxPatch
 
 from src.base.log import logger
+from src.model.resources import RESOURCE
+from src.view.chart import colors
 from src.view.chart import font
 from src.view.chart import helper
 from src.view.chart.abstract_widgets import RoundedTextOneLine
@@ -19,17 +20,17 @@ FILE_DATA_FONT = font.normal(12)
 CHART_LABELS_FONT = font.normal(11)
 UNIT_LABELS_FONT = font.bold(30)
 
-unit_img_fp = r'C:\Projects\test_framework\src\framework\model\resources\img\10-00{mn}.p'
-
 
 class UnitInfo(Region):
+    # TODO: background image switches on model number
+
     def axis_manipulation(self) -> None:
         helper.clear_garbage(self.ax)
         self.ax.set(aspect="equal")
 
     def _set_background(self) -> None:
         self.ax.imshow(
-            helper.img_from_pickle(unit_img_fp.format(mn=self.properties['mn'])),
+            Image.open(RESOURCE.img(f'mn{self.properties["mn"]}')),
             origin='upper', extent=unit_extent, alpha=0.5, zorder=-1
         )
 
@@ -44,10 +45,10 @@ class UnitInfo(Region):
             ))
         }
 
-    def set_result(self, timestamp: datetime = None, sn: int = None, mn: int = None) -> None:
+    def set_result(self, option: str = None, sn: int = None, mn: int = None) -> None:
         # TODO: CFG map 938 -> '10-00938'
         self.artists['unit_data']['sn_mn'].set_text(f'{mn}\n{sn}')
-        self.artists['unit_data']['timestamp'].set_text(str(timestamp).split('.')[0])
+        self.artists['unit_data']['timestamp'].set_text(option)
 
     def _reset_results(self) -> None:
         self.artists['unit_data']['sn_mn'].set_text('')
@@ -107,3 +108,7 @@ class TestStatus(RoundedTextOneLine):
             color='white',
             fontproperties=UNIT_LABELS_FONT
         )
+
+    def set_result_from_iteration(self, iteration) -> None:
+        self.set_result('PASS' if iteration.pf else 'FAIL',
+                        colors.STEP_PROGRESS_COLORS[iteration.pf])

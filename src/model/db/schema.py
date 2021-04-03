@@ -114,7 +114,7 @@ class AppConfigUpdate(Schema):
     def get(cls, session: SessionType) -> 'AppConfigUpdate':
         return session.query(cls).filter(
             cls.id == session.query(func.max(AppConfigUpdate.id)).scalar_subquery()
-        ).first()
+        ).one()
 
 
 class ConfigFile(Schema):
@@ -406,7 +406,7 @@ class LightingStation3LightMeasurement(Schema):
     _repr_fields = ['te', 'fcd', ]
     result_row_id = LightingStation3ResultRow.id_fk()
     result_row = Rel.lighting_station3_result_row_to_light_measurements.child
-    fcd = Column(Float, nullable=False)
+    pct_drop = Column(Float, nullable=False)
     te = Column(Float, nullable=False)
 
 

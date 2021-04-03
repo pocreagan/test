@@ -1,7 +1,6 @@
 import collections
 import functools
 from itertools import chain
-from math import sqrt
 from typing import *
 
 import matplotlib
@@ -9,10 +8,13 @@ from matplotlib.collections import PatchCollection
 from matplotlib.patches import Circle
 from matplotlib.patches import FancyBboxPatch
 
-from model.db.schema import LightingStation3LightMeasurement
-from model.db.schema import LightingStation3ParamRow
-from src.model.resources import RESOURCE
 from src.base.log import logger
+from src.model.db.schema import LightingDUT
+from src.model.db.schema import LightingStation3Iteration
+from src.model.db.schema import LightingStation3LightMeasurement
+from src.model.db.schema import LightingStation3ParamRow
+from src.model.db.schema import LightingStation3ResultRow
+from src.model.resources import RESOURCE
 from src.view.chart import colors
 from src.view.chart import font
 from src.view.chart import helper
@@ -21,7 +23,6 @@ from src.view.chart.base import *
 from src.view.chart.concrete_widgets import ConfigData
 from src.view.chart.concrete_widgets import TestStatus
 from src.view.chart.concrete_widgets import UnitInfo
-from src.model.db import schema
 from stations.lighting.station3.model import Station3TestModel
 
 log = logger(__name__)
@@ -70,15 +71,23 @@ __all__ = [
 ]
 
 
+def _make_string_color(param_row: LightingStation3ParamRow) -> str:
+    return colors.CH_COLORS[param_row.name]
+
+
 class CIE(Region):
     params: Station3TestModel
+    current_param: LightingStation3ParamRow
+
     OFF_SCREEN = -1, -1
 
     def axis_manipulation(self) -> None:
         pass
 
     def __post_init__(self) -> None:
-        [self.artists.__setitem__(k, dict()) for k in self.params.keys()]
+        [self.artists.__setitem__(
+            param_row.id, dict()
+        ) for param_row in self.params.string_params_rows]
 
     def _set_background(self) -> None:
         self.ax.imshow(
@@ -89,8 +98,8 @@ class CIE(Region):
             Circle(
                 (x + CIE_X_OFFSET, y + CIE_Y_OFFSET), r, linewidth=0.5
             ) for x, y, r in zip(*[[
-                    d['color_point'][k] for d in self.params.values()
-                ] for k in ['x_nom', 'y_nom', 'dist']
+                getattr(param_row, k) for param_row in self.params.string_params_rows
+            ] for k in ['x_nom', 'y_nom', 'color_dist_max']
             ])
         ]
 
@@ -99,17 +108,22 @@ class CIE(Region):
         )))
 
     def _init_results(self) -> None:
-        self.artists['cie'] = {k: self.var(self.ax.add_patch(
+        self.artists['cie'] = {param_row.id: self.var(self.ax.add_patch(
             Circle(
                 self.OFF_SCREEN,
-                colors.CH_COLORS[k][-1], alpha=0.7, edgecolor=IP_FACE_COLOR,
-                facecolor=colors.CH_COLORS[k][0],
+                _make_string_color(param_row)[-1], alpha=0.7, edgecolor=IP_FACE_COLOR,
+                facecolor=_make_string_color(param_row)[0],
                 fill=True, linewidth=1, zorder=12,
             )
-        )) for k in self.params.keys()}
+        )) for param_row in self.params.string_params_rows}
 
-    def set_result(self, ch: str, x: float, y: float) -> None:
-        self.artists['cie'][ch].center = x + CIE_X_OFFSET, y + CIE_Y_OFFSET
+    def start_string(self, param_row: LightingStation3ParamRow) -> None:
+        self.current_param = param_row
+
+    def set_result(self, meas: LightingStation3ResultRow) -> None:
+        self.artists['cie'][self.current_param.id].center = (
+            meas.x + CIE_X_OFFSET, meas.y + CIE_Y_OFFSET
+        )
 
     def _reset_results(self) -> None:
         for circle in self.artists['cie'].values():
@@ -118,6 +132,8 @@ class CIE(Region):
 
 class Thermal(Region):
     params: Station3TestModel
+    current_param: LightingStation3ParamRow
+
     l1 = [(THERM_XI, THERM_YF), (THERM_XF, THERM_YF)]
     l2 = [(THERM_XI, THERM_YI), (THERM_XF, THERM_YI)]
 
@@ -137,34 +153,26 @@ class Thermal(Region):
         )
 
     def _init_results(self) -> None:
-        self.artists['initial_fcd_d'] = dict()
         self.artists['therm'] = {param_row.id: self.var(self.ax.plot(
             self.artists['x_results_d'][param_row.id],
             self.artists['y_results_d'][param_row.id],
             marker='',
-            color=colors.CH_COLORS[param_row.id][0],
+            color=_make_string_color(param_row)[0],
             linewidth=THERMAL_CHART_LINE_W_PX,
             alpha=THERMAL_CHART_LINE_ALPHA
         )[0]) for param_row in self.params.string_params_rows}
 
-    def set_result(self, param_row: LightingStation3ParamRow,
-                    meas: LightingStation3LightMeasurement) -> Optional[bool]:
-        initial_fcd = self.artists['initial_fcd_d'].setdefault(param_row.id, meas.fcd)
+    def start_string(self, param_row: LightingStation3ParamRow) -> None:
+        self.current_param = param_row
 
-        dt = (self.params[param_row.id]['thermal']['dt'] * 10)
-        max_drop = self.params[param_row.id]['thermal']['max_pct'] / 100
-
-        y = self.artists['y_results_d'][param_row.id]
-        x = self.artists['x_results_d'][param_row.id]
-
-        drop = ((initial_fcd - meas.fcd) / initial_fcd)
-
-        y.append(((len(y) / (dt - 1)) * THERM_DX) + THERM_XI)
-        x.append((THERM_DY * (1 - (drop / max_drop))) + THERM_YI)
-        self.artists['therm'][param_row.id].set_data(y, x)
-
-        if len(y) == dt:
-            return drop
+    def set_result(self, meas: LightingStation3LightMeasurement) -> None:
+        x = self.artists['x_results_d'][self.current_param.id]
+        y = self.artists['y_results_d'][self.current_param.id]
+        x_co = ((1 - (meas.pct_drop / self.current_param.pct_drop_max)) * THERM_DY) + THERM_YI
+        y_co = ((meas.te / self.current_param.duration) * THERM_DX) + THERM_XI
+        x.append(x_co)
+        y.append(y_co)
+        self.artists['therm'][self.current_param.id].set_data(y, x)
 
     def _reset_results(self) -> None:
         self.artists['initial_fcd_d'].clear()
@@ -176,6 +184,8 @@ class Thermal(Region):
 
 class BarChart(Region):
     params: Station3TestModel
+    current_param: LightingStation3ParamRow
+
     RIGHT_TOP = (1, 0)
     LEFT_TOP = (-1, 0)
 
@@ -206,7 +216,7 @@ class BarChart(Region):
         helper.make_bounds(self.ax, ['r', 'r'], [l1, l2])
 
     def _init_results(self) -> None:
-        num_channels = len(self.params) + 1
+        num_channels = len(self.params.string_params_rows) + 1
         y_max, pad_out = self._scale(num_channels)
 
         self.artists['bar'] = {
@@ -220,17 +230,25 @@ class BarChart(Region):
                 [0] * (num_channels * 2),
                 align='center',
                 color=['b', 'b'] + list(
-                    chain(*[[colors.CH_COLORS[k][0]] * 2 for k in self.params.keys()])),
+                    chain(*[
+                        [_make_string_color(param_row)[0]] * 2 for param_row in self.params.string_params_rows
+                    ])
+                ),
                 alpha=THERMAL_CHART_LINE_ALPHA,
-            )), 'indices': {k: {
+            )), 'indices': {param_row.id: {
                 'fcd': (2 * (i + 1)),
-                'P': (2 * (i + 1)) + 1
-            } for i, k in enumerate(self.params.keys())}
+                'p': (2 * (i + 1)) + 1
+            } for i, param_row in enumerate(self.params.string_params_rows)}
         }
 
-    def set_result(self, ch: str, param: str, value: float):
-        x = (value - self.params[ch][param]['nom']) / self.params[ch][param]['tol']
-        self.artists['bar']['collection'][self.artists['bar']['indices'][ch][param]].set_width(x)
+    def start_string(self, param_row: LightingStation3ParamRow) -> None:
+        self.current_param = param_row
+
+    def set_result(self, meas: LightingStation3ResultRow):
+        for k, index in self.artists['bar']['indices'][self.current_param.id].items():
+            nom = getattr(self.current_param, f'{k}_nom')
+            tol = getattr(self.current_param, f'{k}_tol')
+            self.artists['bar']['collection'][index].set_width((getattr(meas, k) - nom) / tol)
 
     def _reset_results(self):
         for d in self.artists['bar']['indices'].values():
@@ -239,15 +257,19 @@ class BarChart(Region):
 
 class WhiteCalculations(RoundedTextMultiLine):
     params: Station3TestModel
+    current_param: LightingStation3ParamRow
+
     scaling_factor_y = 0.3
     names = ['cct', 'duv']
-
     x_values = [0.4, 0.60]
     alphas = [1., 1.]
-
     fonts = [FILE_DATA_FONT] * 2
     color_values = [IP_FACE_COLOR] * 2
     horizontal_justifications = ['center'] * 2
+
+    @property
+    def key(self) -> str:
+        return self.current_param.id
 
     def axis_manipulation(self) -> None:
         helper.clear_garbage(self.ax)
@@ -275,13 +297,14 @@ class WhiteCalculations(RoundedTextMultiLine):
             alpha=1.0,
         )
 
-    def set_from_color_point(self, x: float, y: float) -> None:
-        self.set_result('cct', r'$ %0d $' % helper.cct(x, y))
-        self.set_result('duv', r'$ %0.3f $' % helper.duv(x, y))
+    def set_from_color_point(self, meas: LightingStation3ResultRow) -> None:
+        self.set_result('cct', r'$ %0d $' % meas.CCT)
+        self.set_result('duv', r'$ %0.3f $' % meas.duv)
 
 
 class ChannelInfo(RoundedTextMultiLine):
     params: Station3TestModel
+    current_param: LightingStation3ParamRow
     scaling_factor_y = 0.55
     names = ['dist', 'fcd', 'P', 'drop']
 
@@ -292,6 +315,10 @@ class ChannelInfo(RoundedTextMultiLine):
     fonts = [CH_INFO_FONT_VALUE] * 2
     horizontal_justifications = ['center'] * 2
 
+    @property
+    def key(self) -> str:
+        return self.current_param.id
+
     def axis_manipulation(self) -> None:
         helper.clear_garbage(self.ax)
 
@@ -300,15 +327,19 @@ class ChannelInfo(RoundedTextMultiLine):
 
     @property
     def spec(self) -> List[str]:
-        params = self.params[self.config['channel_name']]
         spec = [
-            r'$ dist < %.3f $' % (params['color_point']['dist']),
+            r'$ dist < %.3f $' % self.current_param.color_dist_max,
             r'$ %.1f < E_v < %.1f fcd $' % (
-                params['fcd']['nom'] - params['fcd']['tol'], params['fcd']['nom'] + params['fcd']['tol']),
+                self.current_param.fcd_nom - self.current_param.fcd_tol,
+                self.current_param.fcd_nom + self.current_param.fcd_tol
+            ),
             r'$ %.1f < P < %.1f W $' % (
-                params['P']['nom'] - params['P']['tol'], params['P']['nom'] + params['P']['tol']),
-            r'$ drop < %.2f / %.1f s $' % (params['thermal']
-                                           ['max_pct'], params['thermal']['dt']),
+                self.current_param.p_nom - self.current_param.p_tol,
+                self.current_param.p_nom + self.current_param.p_tol
+            ),
+            r'$ drop < %.2f / %.1f s $' % (
+                self.current_param.pct_drop_max, self.current_param.duration
+            ),
         ]
         return spec
 
@@ -320,19 +351,26 @@ class ChannelInfo(RoundedTextMultiLine):
             abs(self.bbox.height),
             boxstyle="round, pad=%f" % self.pad_in,
             fill=False,
-            edgecolor=colors.CH_COLORS[self.config['channel_name']][0],
+            edgecolor=_make_string_color(self.current_param)[0],
             linewidth=1,
             facecolor=None,
             alpha=THERMAL_CHART_LINE_ALPHA,
         )
 
-    def set_value(self, param: str, value: float, is_pass: bool) -> None:
-        self.set_result(param, r'$ ' + str(value) + r' $',
-                        color='#00ff00' if is_pass else '#ff0000')
+    def set_value(self, meas: LightingStation3ResultRow) -> None:
+        self.set_result('dist', r'$ ' + str(meas.cie_dist) + r' $',
+                        color='#00ff00' if meas.cie_pf else '#ff0000')
+        self.set_result('fcd', r'$ ' + str(meas.fcd) + r' $',
+                        color='#00ff00' if meas.fcd_pf else '#ff0000')
+        self.set_result('P', r'$ ' + str(meas.p) + r' $',
+                        color='#00ff00' if meas.p_pf else '#ff0000')
+        self.set_result('drop', r'$ ' + str(meas.pct_drop) + r' $',
+                        color='#00ff00' if meas.pct_drop_pf else '#ff0000')
 
 
 class BigChart(Region):
     params: Station3TestModel
+
     def _set_background(self) -> None:
         pass
 
@@ -363,10 +401,13 @@ CALC_RESULT = Tuple[float, bool]
 
 class Plot(Root):
     params: Station3TestModel
+    current_param: LightingStation3ParamRow
+    white_quality: WhiteCalculations = None
 
-    def _add_info_box(self, top: int, cla: INFO_BOX_T, name: str) -> Tuple[int, INFO_BOX]:
+    def _add_info_box(self, top: int, cla: INFO_BOX_T,
+                      param: LightingStation3ParamRow) -> Tuple[int, INFO_BOX]:
         bottom = top + 16
-        return bottom, cla(self, self.fig.add_subplot(self.gs[top:bottom, 90:125]), channel_name=name)
+        return bottom, cla(self, self.fig.add_subplot(self.gs[top:bottom, 90:125]), current_param=param)
 
     def __post_init__(self) -> None:
         self.big_chart = BigChart(self, self.fig.add_subplot(self.gs[:, :90]))
@@ -375,77 +416,50 @@ class Plot(Root):
         self.config_data = ConfigData(self, self.fig.add_subplot(self.gs[60:74, 125:]))
         self.test_status = TestStatus(self, self.fig.add_subplot(self.gs[74:88, 125:]))
 
-        first, *rest = keys = self.params.string_params_rows
+        _, *rest = params = self.params.string_params_rows
         self.artists['channels'] = {}
         top_offset, _bottom, self.channel_info = 5, None, dict()
 
-        for i, k in enumerate(keys):
+        for i, param in enumerate(params):
             _top = top_offset + (i * 16)
-            _bottom, widget = self._add_info_box(_top, ChannelInfo, k.name)
-            self.channel_info[k.name]: ChannelInfo = widget
+            _bottom, widget = self._add_info_box(_top, ChannelInfo, param)
+            self.channel_info[param.id]: ChannelInfo = widget
 
         if not rest:
-            self.white_quality: WhiteCalculations = self._add_info_box(69, WhiteCalculations, first)[-1]
-
-    def _calc_nom_tol(self, ch: str, param: str, value) -> CALC_RESULT:
-        param = self.params[ch][param]
-        is_pass = ((param['nom'] - param['tol']) <
-                   value < (param['nom'] + param['tol']))
-        return round(value, 1), is_pass
-
-    def _calc_dist(self, ch: str, param: str, value) -> CALC_RESULT:
-        _ = param
-        param = self.params[ch]['color_point']
-        value = sqrt(((value[0] - param['x_nom']) ** 2) +
-                     ((value[1] - param['y_nom']) ** 2))
-        return round(value, 3), value < param['dist']
-
-    def _calc_thermal(self, ch: str, param: str, value) -> CALC_RESULT:
-        _ = param
-        return round(value, 2), value < self.params[ch]['thermal']['max_pct']
-
-    calculations = {
-        'fcd': _calc_nom_tol,
-        'P': _calc_nom_tol,
-        'dist': _calc_dist,
-        'drop': _calc_thermal,
-    }
-
-    def _add_result(self, ch, name, value):
-        # SUPPRESS-LINTER <definitely good>
-        # noinspection PyArgumentList
-        self.channel_info[ch].set_value(name, *self.calculations[name](self, ch, name, value))
+            # self.white_quality: WhiteCalculations = self._add_info_box(
+            #     69, WhiteCalculations, first
+            # )[-1]
+            pass
 
     @functools.singledispatchmethod
     def update(self, msg):
         raise ValueError(f'type {type(msg)} {msg} not recognized')
 
     @update.register
-    def _(self, msg: schema.LightingStation3Iteration) -> None:
-        self.test_status.set_result(msg.status, colors.STEP_PROGRESS_COLORS[msg.status])
+    def _(self, msg: LightingStation3Iteration) -> None:
+        self.test_status.set_result_from_iteration(msg)
+        config_info = [fw.name for fw in msg.firmware_iterations]
+        config_info.extend(cfg.name for cfg in msg.config_iterations)
+        self.config_data.set_result(config_info)
 
     @update.register
-    def _(self, msg: schema.LightingDUT) -> None:
-        self.unit_info.set_result(msg.timestamp, msg.sn, msg.mn)
-        self.config_data.set_result(msg.config)
+    def _(self, msg: LightingDUT) -> None:
+        self.unit_info.set_result(msg.option or '', msg.sn, msg.mn)
 
     @update.register
-    def _(self, msg: schema.LightingStation3LightMeasurement) -> None:
-        drop = self.big_chart.thermal.set_result(msg.string_dmx, msg.fcd)
-        if drop:
-            self._add_result(msg.string_dmx, 'drop', drop * 100)
+    def _(self, msg: LightingStation3LightMeasurement) -> None:
+        self.big_chart.thermal.set_result(msg)
 
     @update.register
-    def _(self, msg: schema.LightingStation3ResultRow) -> None:
-        k, x, y = msg.string_dmx, msg.x, msg.y
+    def _(self, param_row: LightingStation3ParamRow) -> None:
+        self.current_param = param_row
 
-        self._add_result(k, 'dist', [x, y])
+    @update.register
+    def _(self, msg: LightingStation3ResultRow) -> None:
+        self.big_chart.cie.set_result(msg)
+        self.channel_info[self.current_param.id].set_value(msg)
+        self.bar_chart.set_result(msg)
 
-        if 'W' in k:
-            self.white_quality.set_from_color_point(x, y)
-
-        self.big_chart.cie.set_result(k, x, y)
-
-        for value, param in zip([msg.fcd, msg.W], ['fcd', 'P']):
-            self._add_result(k, param, value)
-            self.bar_chart.set_result(k, param, value)
+        # TODO: white quality might need implemented
+        # if 'W' in k:
+        #     self.white_quality.set_from_color_point(x, y)

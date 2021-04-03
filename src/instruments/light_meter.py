@@ -42,7 +42,7 @@ class LightMeterError(InstrumentError):
 
 @dataclass
 class ThermalDropSample:
-    fcd: float
+    pct_drop: float
     te: float
 
 
@@ -259,7 +259,8 @@ class LightMeter(Instrument):
                     _t = rolling_meas[2][1]
 
                 consumer(ThermalDropSample(
-                    fcd=averaged_meas.fcd, te=(_t - first_t).total_seconds()
+                    pct_drop=(first_meas.fcd - averaged_meas.fcd) / first_meas.fcd,
+                    te=(_t - first_t).total_seconds()
                 ))
 
                 if perf_counter() > tf:

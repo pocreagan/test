@@ -7,8 +7,6 @@ from typing import Type
 from typing import Union
 
 from attrdict import AttrDict
-
-from model import configuration
 from src.base.general import test_nom_tol
 from src.base.log import logger
 from src.instruments.base.instrument import instruments_joined
@@ -16,7 +14,8 @@ from src.instruments.base.instrument import instruments_spawned
 from src.instruments.dc_power_supplies import DCLevel
 from src.instruments.dc_power_supplies.bk_ps import BKPowerSupply
 from src.instruments.dc_power_supplies.connection_states import ConnectionState
-from src.instruments.dc_power_supplies.connection_states import ConnectionStateCalcType
+from src.instruments.dc_power_supplies.connection_states import \
+    ConnectionStateCalcType
 from src.instruments.light_meter import LightMeasurement
 from src.instruments.light_meter import LightMeter
 from src.instruments.light_meter import LightMeterError
@@ -24,6 +23,7 @@ from src.instruments.light_meter import ThermalDropSample
 from src.instruments.wet.rs485 import RS485
 from src.instruments.wet.rs485 import RS485Error
 from src.instruments.wet.rs485 import WETCommandError
+from src.model import configuration
 from src.model.db import connect
 from src.model.db.schema import Configuration
 from src.model.db.schema import ConfirmUnitIdentityIteration
@@ -41,6 +41,11 @@ from src.stations.test_station import TestFailure
 from src.stations.test_station import TestStation
 
 log = logger(__name__)
+
+
+__all__ = [
+    'Station3',
+]
 
 
 class Station3(TestStation):
@@ -96,7 +101,7 @@ class Station3(TestStation):
         _emit = self.emit
 
         def consumer(sample: ThermalDropSample) -> None:
-            model = LightingStation3LightMeasurement(fcd=sample.fcd, te=sample.te)
+            model = LightingStation3LightMeasurement(pct_drop=sample.pct_drop, te=sample.te)
             light_measurements.append(model)
             _emit(model)
 
