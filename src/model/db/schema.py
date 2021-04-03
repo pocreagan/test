@@ -7,13 +7,13 @@ import json
 import re
 from dataclasses import dataclass
 from dataclasses import field
-from operator import attrgetter
 from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
 from typing import Tuple
 from typing import Type
+from typing import TypeVar
 from typing import Union
 
 import funcy
@@ -21,6 +21,7 @@ from sqlalchemy import Column
 from sqlalchemy import func
 from sqlalchemy import UniqueConstraint
 from sqlalchemy.ext.declarative import DeclarativeMeta
+from sqlalchemy.sql.selectable import ScalarSelect
 from sqlalchemy.sql.sqltypes import Boolean
 from sqlalchemy.sql.sqltypes import DateTime
 from sqlalchemy.sql.sqltypes import Enum
@@ -30,9 +31,9 @@ from sqlalchemy.sql.sqltypes import LargeBinary
 from sqlalchemy.sql.sqltypes import String
 from sqlalchemy.sql.sqltypes import Text
 
-from src.model.configuration import get_configs_on_object
 from src.base.db.connection import SessionType
 from src.base.db.meta import *
+from src.model.configuration import get_configs_on_object
 from src.model.enums import *
 
 __all__ = [
@@ -111,10 +112,14 @@ class AppConfigUpdate(Schema):
     objects = Column(Text)
 
     @classmethod
-    def get(cls, session: SessionType) -> 'AppConfigUpdate':
-        return session.query(cls).filter(
-            cls.id == session.query(func.max(AppConfigUpdate.id)).scalar_subquery()
-        ).one()
+    def rev(cls, session: SessionType, rev: int = None) -> Union[ScalarSelect, int]:
+        if rev is None:
+            return session.query(func.max(cls.id)).scalar_subquery()
+        return rev
+
+    @classmethod
+    def get(cls, session: SessionType, rev: int = None) -> 'AppConfigUpdate':
+        return session.query(cls).filter(cls.id == cls.rev(session, rev)).one()
 
 
 class ConfigFile(Schema):
@@ -143,7 +148,7 @@ class YamlFile(Schema):
     @classmethod
     def get(cls, session: SessionType, fp: str) -> Dict[str, Any]:
         result: Optional[YamlFile] = session.query(cls).filter(
-            cls.fp == fp, cls.rev == session.query(func.max(AppConfigUpdate.id)).scalar_subquery()
+            cls.fp == fp, cls.rev == AppConfigUpdate.rev(session)
         ).one_or_none()
         if not result:
             raise ValueError(f'{fp} deprecated or not present in the {cls.__name__} table')
@@ -179,7 +184,7 @@ class LightingStation3Param(Schema):
     @classmethod
     def get(cls, session: SessionType, name: str) -> 'LightingStation3Param':
         result = session.query(cls).filter(
-            cls.name == name, cls.rev == session.query(func.max(AppConfigUpdate.id)).scalar_subquery()
+            cls.name == name, cls.rev == AppConfigUpdate.rev(session)
         ).one_or_none()
         if not result:
             raise ValueError(f'{name} deprecated or not present in the {cls.__name__} table')
@@ -243,9 +248,7 @@ class EEPROMConfig(Schema):
     @classmethod
     def get(cls, session: SessionType, name: str, is_initial: bool) -> Configuration:
         result = session.query(cls).filter(
-            cls.name == name, cls.is_initial == is_initial, cls.rev == session.query(
-                func.max(AppConfigUpdate.id)
-            ).scalar_subquery()
+            cls.name == name, cls.is_initial == is_initial, cls.rev == AppConfigUpdate.rev(session)
         ).one_or_none()
         if not result:
             raise ValueError(
@@ -319,9 +322,7 @@ class FirmwareVersion(Schema):
     @classmethod
     def get(cls, session: SessionType, name: str) -> Firmware:
         result = session.query(cls).filter(
-            cls.name == name, cls.rev == session.query(
-                func.max(AppConfigUpdate.id)
-            ).scalar_subquery()
+            cls.name == name, cls.rev == AppConfigUpdate.rev(session)
         ).one_or_none()
         if not result:
             raise ValueError(f'{name} deprecated or not present in the {cls.__name__} table')
@@ -371,6 +372,8 @@ light_measurement_association_table = Relationship.association(
     'LightingStation3LightMeasurement', 'result_row'
 )
 
+_T = TypeVar('_T')
+
 
 class LightingStation3Iteration(Schema):
     _repr_fields = ['p_f', 'created_at']
@@ -379,6 +382,27 @@ class LightingStation3Iteration(Schema):
     config_iterations = lighting_station3_config_iteration_association.parent
     result_rows = Rel.lighting_station3_iteration_results.parent
     pf = Column(Boolean, default=False)
+
+    __collection_map = {'LightingStation3ResultRow': 'result_rows',
+                        'ConfirmUnitIdentityIteration': 'unit_identity_confirmations',
+                        'FirmwareIteration': 'firmware_iterations',
+                        'EEPROMConfigIteration': 'config_iterations', }
+
+    def add(self, obj: _T) -> _T:
+        getattr(self, self.__collection_map[type(obj).__name__]).append(obj)
+        return obj
+
+    def resolve(self) -> 'LightingStation3Iteration':
+        identity_confirms: List[ConfirmUnitIdentityIteration] = self.unit_identity_confirmations
+        config_iterations: List[EEPROMConfigIteration] = self.config_iterations
+        firmware_iterations: List[FirmwareIteration] = self.firmware_iterations
+        _ = [it.firmware for it in firmware_iterations]
+        _ = [it.config for it in config_iterations]
+        rows: List[LightingStation3ResultRow] = self.result_rows
+        param_rows: List[LightingStation3ParamRow] = [row.param_row for row in rows]
+        _ = [row.light_measurements for row in rows]
+        _ = [row.params for row in param_rows]
+        return self
 
 
 class LightingStation3ResultRow(Schema):

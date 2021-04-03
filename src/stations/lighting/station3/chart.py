@@ -1,5 +1,6 @@
 import collections
 from itertools import chain
+from operator import attrgetter
 from typing import *
 
 import matplotlib
@@ -8,10 +9,14 @@ from matplotlib.patches import Circle
 from matplotlib.patches import FancyBboxPatch
 from singledispatchmethod import singledispatchmethod
 
+from src.model.db.schema import EEPROMConfigIteration
+from src.model.db.schema import FirmwareIteration
 from src.base.log import logger
+from src.model.db import connect
 from src.model.db.schema import LightingDUT
 from src.model.db.schema import LightingStation3Iteration
 from src.model.db.schema import LightingStation3LightMeasurement
+from src.model.db.schema import LightingStation3Param
 from src.model.db.schema import LightingStation3ParamRow
 from src.model.db.schema import LightingStation3ResultRow
 from src.model.resources import RESOURCE
@@ -23,6 +28,7 @@ from src.view.chart.base import *
 from src.view.chart.concrete_widgets import ConfigData
 from src.view.chart.concrete_widgets import TestStatus
 from src.view.chart.concrete_widgets import UnitInfo
+from src.view.chart.debug_window import ChartDebugWindow
 
 log = logger(__name__)
 
@@ -69,9 +75,18 @@ __all__ = [
     'Plot',
 ]
 
+_string_colors = {
+    'Full On': colors.CH_COLORS['T100'],
+    'Red': colors.CH_COLORS['R100'],
+    'Green': colors.CH_COLORS['G100'],
+    'Blue': colors.CH_COLORS['B100'],
+    'Lime': colors.CH_COLORS['L100'],
+    'White': colors.CH_COLORS['W100'],
+}
+
 
 def _make_string_color(param_row: LightingStation3ParamRow) -> str:
-    return colors.CH_COLORS[param_row.name]
+    return _string_colors[param_row.name]
 
 
 class CIE(Region):
@@ -167,18 +182,26 @@ class Thermal(Region):
     def set_result(self, meas: LightingStation3LightMeasurement) -> None:
         x = self.artists['x_results_d'][self.current_param.id]
         y = self.artists['y_results_d'][self.current_param.id]
-        x_co = ((1 - (meas.pct_drop / self.current_param.pct_drop_max)) * THERM_DY) + THERM_YI
+        x_co = ((1 - ((meas.pct_drop * 100) / self.current_param.pct_drop_max)) * THERM_DY) + THERM_YI
         y_co = ((meas.te / self.current_param.duration) * THERM_DX) + THERM_XI
         x.append(x_co)
         y.append(y_co)
         self.artists['therm'][self.current_param.id].set_data(y, x)
 
     def _reset_results(self) -> None:
-        self.artists['initial_fcd_d'].clear()
         [self.artists[k].clear() for k in ['x_results_d', 'y_results_d']]
         for ch, plot in self.artists['therm'].items():
             plot.set_data(self.artists['x_results_d'][ch],
                           self.artists['y_results_d'][ch])
+
+    def populate_from_list(self, measurements: List[LightingStation3LightMeasurement]) -> None:
+        x = self.artists['x_results_d'][self.current_param.id]
+        y = self.artists['y_results_d'][self.current_param.id]
+        x_co, y_co = [], []
+        for meas in measurements:
+            x_co.append(((1 - ((meas.pct_drop * 100) / self.current_param.pct_drop_max)) * THERM_DY) + THERM_YI)
+            y_co.append(((meas.te / self.current_param.duration) * THERM_DX) + THERM_XI)
+        self.artists['therm'][self.current_param.id].set_data(y, x)
 
 
 class BarChart(Region):
@@ -314,6 +337,10 @@ class ChannelInfo(RoundedTextMultiLine):
     fonts = [CH_INFO_FONT_VALUE] * 2
     horizontal_justifications = ['center'] * 2
 
+    def __post_init__(self) -> None:
+        RoundedTextMultiLine.__post_init__(self)
+        self.current_param = self.config['current_param']
+
     @property
     def key(self) -> str:
         return self.config['current_param'].id
@@ -357,13 +384,13 @@ class ChannelInfo(RoundedTextMultiLine):
         )
 
     def set_value(self, meas: LightingStation3ResultRow) -> None:
-        self.set_result('dist', r'$ ' + str(meas.cie_dist) + r' $',
+        self.set_result('dist', f'$ {meas.cie_dist:.3f} $',
                         color='#00ff00' if meas.cie_pf else '#ff0000')
-        self.set_result('fcd', r'$ ' + str(meas.fcd) + r' $',
+        self.set_result('fcd', f'$ {meas.fcd:.1f} $',
                         color='#00ff00' if meas.fcd_pf else '#ff0000')
-        self.set_result('P', r'$ ' + str(meas.p) + r' $',
+        self.set_result('P', f'$ {meas.p:.1f} $',
                         color='#00ff00' if meas.p_pf else '#ff0000')
-        self.set_result('drop', r'$ ' + str(meas.pct_drop) + r' $',
+        self.set_result('drop', f'$ {meas.pct_drop:.2f} $',
                         color='#00ff00' if meas.pct_drop_pf else '#ff0000')
 
 
@@ -402,11 +429,26 @@ class Plot(Root):
     params: List[LightingStation3ParamRow]
     current_param: LightingStation3ParamRow
     white_quality: WhiteCalculations = None
+    param_row_index: int = 0
 
     def _add_info_box(self, top: int, cla: INFO_BOX_T,
                       param: LightingStation3ParamRow) -> Tuple[int, INFO_BOX]:
         bottom = top + 16
         return bottom, cla(self, self.fig.add_subplot(self.gs[top:bottom, 90:125]), current_param=param)
+
+    def increment_param_row(self) -> None:
+        self.param_row_index += 1
+        try:
+            self.set_attr_propagate(
+                'current_param', self.params[self.param_row_index]
+            )
+        except IndexError:
+            pass
+
+    def init_results(self) -> None:
+        self.param_row_index: int = -1
+        self.increment_param_row()
+        super().init_results()
 
     def __post_init__(self) -> None:
         self.big_chart = BigChart(self, self.fig.add_subplot(self.gs[:, :90]))
@@ -434,8 +476,10 @@ class Plot(Root):
     @update.register
     def _(self, msg: LightingStation3Iteration) -> None:
         self.test_status.set_result_from_iteration(msg)
-        config_info = [fw.name for fw in msg.firmware_iterations]
-        config_info.extend(cfg.name for cfg in msg.config_iterations)
+        fw_iterations: List[FirmwareIteration] = msg.firmware_iterations
+        cfg_iterations: List[EEPROMConfigIteration] = msg.config_iterations
+        config_info = [fw.firmware.name for fw in fw_iterations]
+        config_info.extend(cfg.config.name for cfg in cfg_iterations)
         self.config_data.set_result(config_info)
 
     @update.register
@@ -447,15 +491,34 @@ class Plot(Root):
         self.big_chart.thermal.set_result(msg)
 
     @update.register
-    def _(self, param_row: LightingStation3ParamRow) -> None:
-        self.current_param = param_row
-
-    @update.register
     def _(self, msg: LightingStation3ResultRow) -> None:
         self.big_chart.cie.set_result(msg)
         self.channel_info[self.current_param.id].set_value(msg)
         self.bar_chart.set_result(msg)
+        self.increment_param_row()
 
         # TODO: white quality might need implemented
         # if 'W' in k:
         #     self.white_quality.set_from_color_point(x, y)
+
+    def populate_from_iteration(self, record: LightingStation3Iteration) -> None:
+        for meas in iteration.result_rows:  # type: LightingStation3ResultRow
+            thermal: List[LightingStation3LightMeasurement] = measurement.light_measurements
+            self.big_chart.thermal.populate_from_list(thermal)
+            self.update(meas)
+        self.update(iteration)
+
+
+if __name__ == '__main__':
+    with logger:
+        with connect(echo_sql=False)(expire=False) as session:
+            params = LightingStation3Param.get(session, '918 brighter')
+            rows = list(sorted(params.rows, key=attrgetter('row_num')))
+            iteration: LightingStation3Iteration = session.query(
+                LightingStation3Iteration
+            ).first()
+            dut = LightingDUT(sn=9000000, mn=918, option='bright')
+            measurement: LightingStation3ResultRow = iteration.result_rows[0]
+            light_measurements: List[LightingStation3LightMeasurement] = measurement.light_measurements
+            messages = [dut, *light_measurements, measurement, iteration]
+            window = ChartDebugWindow(Plot(rows, mn=918), 1, messages).mainloop()

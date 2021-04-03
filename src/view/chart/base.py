@@ -53,16 +53,21 @@ class Widget:
             self.__animated.extend(chain(*[c.animated for c in self.children]))
         return self.__animated
 
-    def _propagate(self, f: str) -> None:
+    def _propagate(self, f: str, *args, **kwargs) -> None:
         """
         perform method on self, then on children
         then if <method>_after is defined, performs it
         """
-        getattr(self, f'_{f}')()
-        [getattr(child, f)() for child in self.children]
+        getattr(self, f'_{f}')(*args, **kwargs)
+        [getattr(child, f)(*args, **kwargs) for child in self.children]
         method = getattr(self, f'_{f}_after', None)
         if callable(method):
-            method()
+            method(*args, **kwargs)
+
+    def set_attr_propagate(self, k: str, v: _T) -> _T:
+        setattr(self, k, v)
+        [child.set_attr_propagate(k, v) for child in self.children]
+        return v
 
     def _set_background(self) -> None:
         raise NotImplementedError
@@ -150,7 +155,10 @@ class Root(Widget, Generic[_T]):
         self._bg = self._bg or self.canvas.copy_from_bbox(self.canvas.figure.bbox)
 
     def __call__(self, iteration_data: List[ITERATION_DATA]):
-        list(map(self.update, iteration_data))
+        if hasattr(iteration_data, '__iter__'):
+            list(map(self.update, iteration_data))
+        else:
+            self.update(iteration_data)
         self.canvas.restore_region(self._bg)
         list(map(self.canvas.figure.draw_artist, self.animated))
         self.canvas.blit(self.canvas.figure.bbox)
@@ -172,7 +180,7 @@ class Region(Widget, Generic[_T]):
     def axis_manipulation(self) -> None:
         raise NotImplementedError
 
-    def __init__(self, parent: Union['Region'[_T], Root[_T]], axis: plt.Axes = None, **kwargs) -> None:
+    def __init__(self, parent: Union['Region[_T]', Root[_T]], axis: plt.Axes = None, **kwargs) -> None:
         Widget.__init__(self)
 
         self.parent = parent

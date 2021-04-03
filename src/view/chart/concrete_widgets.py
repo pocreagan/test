@@ -110,5 +110,5 @@ class TestStatus(RoundedTextOneLine):
         )
 
     def set_result_from_iteration(self, iteration) -> None:
-        self.set_result('PASS' if iteration.pf else 'FAIL',
-                        colors.STEP_PROGRESS_COLORS[iteration.pf])
+        result_name = 'PASS' if iteration.pf else 'FAIL'
+        self.set_result(result_name, colors.STEP_PROGRESS_COLORS[result_name])

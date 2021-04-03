@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from itertools import chain
 from typing import Any
 from typing import Callable
@@ -117,7 +118,7 @@ class TestStation(instrument.InstrumentHandler, Logged):
     model_builder: Any
     session_manager: SessionManager
     unit: DUTIdentityModel
-    models: Any
+    model: dataclass
     iteration: Any
     session: SessionType
     config: Dict[str, Any]
@@ -147,8 +148,8 @@ class TestStation(instrument.InstrumentHandler, Logged):
         self.emit(str(e))
 
     def run(self, unit: DUTIdentityModel):
-        self.models = self.model_builder()
-        self.iteration_setup(unit)
+        self.unit = unit
+        self.model = self.model_builder.for_dut(self.unit)
         try:
             self.perform_test()
 
@@ -162,12 +163,6 @@ class TestStation(instrument.InstrumentHandler, Logged):
             session.add(self.iteration)
 
         return self.iteration
-
-    def iteration_setup(self, unit: DUTIdentityModel):
-        """
-        build test iteration model from schema and configs
-        """
-        raise NotImplementedError
 
     def perform_test(self) -> None:
         """

@@ -68,10 +68,10 @@ class Formatter:
                     return v
             for k, v in self._replace_prefix.items():
                 if _name.startswith(k):
-                    return v + _name.removeprefix(k).upper()
+                    return v + _name[len(k):].upper()
             for k in self._replace_portion:
                 if _name.startswith(k):
-                    return _name.removeprefix(k).upper()
+                    return _name[len(k):].upper()
             return _name
 
         def _add_stack_info(self, record: logging.LogRecord, s: str) -> str:

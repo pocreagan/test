@@ -1,14 +1,11 @@
 from datetime import datetime
 from operator import attrgetter
-from typing import Dict
 from typing import List
-from typing import Optional
 from typing import Type
 from typing import Union
 
 from attrdict import AttrDict
 
-from src.model import configuration
 from src.base.general import test_nom_tol
 from src.base.log import logger
 from src.instruments.base.instrument import instruments_joined
@@ -24,6 +21,7 @@ from src.instruments.light_meter import ThermalDropSample
 from src.instruments.wet.rs485 import RS485
 from src.instruments.wet.rs485 import RS485Error
 from src.instruments.wet.rs485 import WETCommandError
+from src.model import configuration
 from src.model.db import connect
 from src.model.db.schema import Configuration
 from src.model.db.schema import ConfirmUnitIdentityIteration
@@ -36,12 +34,11 @@ from src.model.db.schema import LightingStation3LightMeterCalibration
 from src.model.db.schema import LightingStation3ParamRow
 from src.model.db.schema import LightingStation3ResultRow
 from src.stations.lighting.station3.model import Station3Model
-from src.stations.lighting.station3.model import Station3TestModel
+from src.stations.lighting.station3.model import Station3ModelBuilder
 from src.stations.test_station import TestFailure
 from src.stations.test_station import TestStation
 
 log = logger(__name__)
-
 
 __all__ = [
     'Station3',
@@ -49,10 +46,9 @@ __all__ = [
 
 
 class Station3(TestStation):
-    model_builder_t = Station3Model
-    model_builder: Station3Model
-    models: Dict[int, Dict[Optional[str], Station3TestModel]]
-    model: Station3TestModel
+    model_builder_t = Station3ModelBuilder
+    model_builder: Station3ModelBuilder
+    model: Station3Model
     iteration: LightingStation3Iteration
     unit: LightingDUT
 
@@ -105,13 +101,11 @@ class Station3(TestStation):
             light_measurements.append(model)
             _emit(model)
 
-        light_measurement_promise = self.lm.thermal_drop(
-            params.fcd_nom * .05, params.duration, 2., consumer
-        )
-
         try:
             # noinspection PyUnresolvedReferences
-            first, last = light_measurement_promise.resolve()  # type: LightMeasurement, LightMeasurement
+            first, last = self.lm.thermal_drop(
+                params.fcd_nom * .05, params.duration, 2., consumer
+            ).resolve()  # type: LightMeasurement, LightMeasurement
 
         except LightMeterError as e:
             raise TestFailure(str(e))
@@ -143,8 +137,7 @@ class Station3(TestStation):
 
     @instruments_joined
     def configure(self, config: Configuration, wait_after: bool) -> EEPROMConfigIteration:
-        config_model = EEPROMConfigIteration(config_id=config.config_id)
-        self.iteration.config_iterations.append(config_model)
+        config_model = self.iteration.add(EEPROMConfigIteration(config_id=config.config_id))
         try:
             self.ftdi.wet_configure(config.registers, self.emit, read_first=False)
 
@@ -159,8 +152,7 @@ class Station3(TestStation):
 
     @instruments_joined
     def unit_identity(self, unit: LightingDUT, do_write: bool) -> ConfirmUnitIdentityIteration:
-        unit_identity_confirmation_model = ConfirmUnitIdentityIteration()
-        self.iteration.unit_identity_confirmations.append(unit_identity_confirmation_model)
+        unit_identity_confirmation_model = self.iteration.add(ConfirmUnitIdentityIteration())
         try:
             if do_write:
                 self.ftdi.wet_write_unit_identity(unit.sn, unit.mn)
@@ -184,10 +176,6 @@ class Station3(TestStation):
 
         return connection
 
-    def iteration_setup(self, unit: LightingDUT) -> None:
-        self.unit = unit
-        self.model = self.models.get(self.unit.mn).get(self.unit.option)
-
     @instruments_spawned
     def perform_test(self) -> LightingStation3Iteration:
         self.iteration = LightingStation3Iteration()
@@ -203,10 +191,9 @@ class Station3(TestStation):
             if not self.ftdi.wet_at_least_bootloader().resolve():
                 raise TestFailure('failed to establish communication with the chroma')
 
-            firmware_iteration_model = FirmwareIteration(
+            firmware_iteration_model = self.iteration.add(FirmwareIteration(
                 firmware_id=self.model.firmware_object.version_id,
-            )
-            self.iteration.firmware_iterations.append(firmware_iteration_model)
+            ))
 
             if self.model.firmware_force_overwrite or not self.ftdi.dta_is_programmed_correctly(
                     self.model.firmware_object.version
@@ -244,7 +231,6 @@ class Station3(TestStation):
             self.configure(self.model.final_config_object, False)
 
         self.iteration.pf = all(map(attrgetter('pf'), self.iteration.result_rows))
-        return self.iteration
 
     @classmethod
     def debug_test(cls, unit: LightingDUT) -> None:
