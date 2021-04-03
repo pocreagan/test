@@ -142,6 +142,7 @@ def _check_path(fp: _PATH_T) -> str:
 
 
 class _ConfigFrom:
+    original_fp: str
     def __init__(self, fp: str, header: str, field_type: Type[_ConfigField]) -> None:
         self.fp = fp
         self.header = header
@@ -159,7 +160,7 @@ class _ConfigFrom:
 
     def tk_color(self) -> str:
         # noinspection PyTypeChecker
-        return self.field(tuple, transform=tuple_to_hex_color)
+        return self.field(str, transform=tuple_to_hex_color)
 
     def __set_name__(self, owner, name):
         self.owner = owner
@@ -188,11 +189,15 @@ def update_configs_on_object(obj) -> None:
 
 
 def from_yml(fp: _PATH_T, header: str = None) -> _ConfigFrom:
-    return _ConfigFrom(_check_path(fp), header, _ConfigFieldFromDict)
+    cfg = _ConfigFrom(_check_path(fp), header, _ConfigFieldFromDict)
+    cfg.original_fp = fp
+    return cfg
 
 
 def from_resource(fp: _PATH_T, header: str = None) -> _ConfigFrom:
-    return _ConfigFrom(fp, header, _ConfigFieldFromDict)
+    cfg = _ConfigFrom(fp, header, _ConfigFieldFromDict)
+    cfg.original_fp = fp
+    return cfg
 
 
 _lock = threading.RLock()

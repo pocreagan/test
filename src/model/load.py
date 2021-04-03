@@ -5,6 +5,7 @@ from pathlib import Path
 from types import ModuleType
 from typing import Callable
 from typing import Dict
+from typing import Generic
 from typing import Tuple
 from typing import TypeVar
 from typing import Union
@@ -63,15 +64,15 @@ _lazy_access_sentinel = object()
 _T = TypeVar('_T')
 
 
-def lazy_access(f: Callable[..., _T]) -> _T:
-    @wraps(f)
-    def inner(self):
-        v = f(self)
-        setattr(self, f.__name__, v)
+# noinspection PyPep8Naming
+class lazy_access(Generic[_T]):
+    def __init__(self, f: Callable[..., _T]) -> None:
+        self._f = f
+
+    def __get__(self, instance, owner) -> _T:
+        v = self._f(instance)
+        setattr(instance, self._f.__name__, v)
         return v
-
-    return inner
-
 
 def dynamic_import(module: str, *path_parts):
     from importlib import import_module

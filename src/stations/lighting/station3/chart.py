@@ -1,5 +1,4 @@
 import collections
-import functools
 from itertools import chain
 from typing import *
 
@@ -7,6 +6,7 @@ import matplotlib
 from matplotlib.collections import PatchCollection
 from matplotlib.patches import Circle
 from matplotlib.patches import FancyBboxPatch
+from singledispatchmethod import singledispatchmethod
 
 from src.base.log import logger
 from src.model.db.schema import LightingDUT
@@ -23,7 +23,6 @@ from src.view.chart.base import *
 from src.view.chart.concrete_widgets import ConfigData
 from src.view.chart.concrete_widgets import TestStatus
 from src.view.chart.concrete_widgets import UnitInfo
-from stations.lighting.station3.model import Station3TestModel
 
 log = logger(__name__)
 
@@ -76,7 +75,7 @@ def _make_string_color(param_row: LightingStation3ParamRow) -> str:
 
 
 class CIE(Region):
-    params: Station3TestModel
+    params: List[LightingStation3ParamRow]
     current_param: LightingStation3ParamRow
 
     OFF_SCREEN = -1, -1
@@ -87,7 +86,7 @@ class CIE(Region):
     def __post_init__(self) -> None:
         [self.artists.__setitem__(
             param_row.id, dict()
-        ) for param_row in self.params.string_params_rows]
+        ) for param_row in self.params]
 
     def _set_background(self) -> None:
         self.ax.imshow(
@@ -98,7 +97,7 @@ class CIE(Region):
             Circle(
                 (x + CIE_X_OFFSET, y + CIE_Y_OFFSET), r, linewidth=0.5
             ) for x, y, r in zip(*[[
-                getattr(param_row, k) for param_row in self.params.string_params_rows
+                getattr(param_row, k) for param_row in self.params
             ] for k in ['x_nom', 'y_nom', 'color_dist_max']
             ])
         ]
@@ -115,7 +114,7 @@ class CIE(Region):
                 facecolor=_make_string_color(param_row)[0],
                 fill=True, linewidth=1, zorder=12,
             )
-        )) for param_row in self.params.string_params_rows}
+        )) for param_row in self.params}
 
     def start_string(self, param_row: LightingStation3ParamRow) -> None:
         self.current_param = param_row
@@ -131,7 +130,7 @@ class CIE(Region):
 
 
 class Thermal(Region):
-    params: Station3TestModel
+    params: List[LightingStation3ParamRow]
     current_param: LightingStation3ParamRow
 
     l1 = [(THERM_XI, THERM_YF), (THERM_XF, THERM_YF)]
@@ -160,7 +159,7 @@ class Thermal(Region):
             color=_make_string_color(param_row)[0],
             linewidth=THERMAL_CHART_LINE_W_PX,
             alpha=THERMAL_CHART_LINE_ALPHA
-        )[0]) for param_row in self.params.string_params_rows}
+        )[0]) for param_row in self.params}
 
     def start_string(self, param_row: LightingStation3ParamRow) -> None:
         self.current_param = param_row
@@ -183,7 +182,7 @@ class Thermal(Region):
 
 
 class BarChart(Region):
-    params: Station3TestModel
+    params: List[LightingStation3ParamRow]
     current_param: LightingStation3ParamRow
 
     RIGHT_TOP = (1, 0)
@@ -216,7 +215,7 @@ class BarChart(Region):
         helper.make_bounds(self.ax, ['r', 'r'], [l1, l2])
 
     def _init_results(self) -> None:
-        num_channels = len(self.params.string_params_rows) + 1
+        num_channels = len(self.params) + 1
         y_max, pad_out = self._scale(num_channels)
 
         self.artists['bar'] = {
@@ -231,14 +230,14 @@ class BarChart(Region):
                 align='center',
                 color=['b', 'b'] + list(
                     chain(*[
-                        [_make_string_color(param_row)[0]] * 2 for param_row in self.params.string_params_rows
+                        [_make_string_color(param_row)[0]] * 2 for param_row in self.params
                     ])
                 ),
                 alpha=THERMAL_CHART_LINE_ALPHA,
             )), 'indices': {param_row.id: {
                 'fcd': (2 * (i + 1)),
                 'p': (2 * (i + 1)) + 1
-            } for i, param_row in enumerate(self.params.string_params_rows)}
+            } for i, param_row in enumerate(self.params)}
         }
 
     def start_string(self, param_row: LightingStation3ParamRow) -> None:
@@ -256,7 +255,7 @@ class BarChart(Region):
 
 
 class WhiteCalculations(RoundedTextMultiLine):
-    params: Station3TestModel
+    params: List[LightingStation3ParamRow]
     current_param: LightingStation3ParamRow
 
     scaling_factor_y = 0.3
@@ -269,7 +268,7 @@ class WhiteCalculations(RoundedTextMultiLine):
 
     @property
     def key(self) -> str:
-        return self.current_param.id
+        return self.config['current_param'].id
 
     def axis_manipulation(self) -> None:
         helper.clear_garbage(self.ax)
@@ -303,7 +302,7 @@ class WhiteCalculations(RoundedTextMultiLine):
 
 
 class ChannelInfo(RoundedTextMultiLine):
-    params: Station3TestModel
+    params: List[LightingStation3ParamRow]
     current_param: LightingStation3ParamRow
     scaling_factor_y = 0.55
     names = ['dist', 'fcd', 'P', 'drop']
@@ -317,7 +316,7 @@ class ChannelInfo(RoundedTextMultiLine):
 
     @property
     def key(self) -> str:
-        return self.current_param.id
+        return self.config['current_param'].id
 
     def axis_manipulation(self) -> None:
         helper.clear_garbage(self.ax)
@@ -369,7 +368,7 @@ class ChannelInfo(RoundedTextMultiLine):
 
 
 class BigChart(Region):
-    params: Station3TestModel
+    params: List[LightingStation3ParamRow]
 
     def _set_background(self) -> None:
         pass
@@ -400,7 +399,7 @@ CALC_RESULT = Tuple[float, bool]
 
 
 class Plot(Root):
-    params: Station3TestModel
+    params: List[LightingStation3ParamRow]
     current_param: LightingStation3ParamRow
     white_quality: WhiteCalculations = None
 
@@ -416,22 +415,19 @@ class Plot(Root):
         self.config_data = ConfigData(self, self.fig.add_subplot(self.gs[60:74, 125:]))
         self.test_status = TestStatus(self, self.fig.add_subplot(self.gs[74:88, 125:]))
 
-        _, *rest = params = self.params.string_params_rows
         self.artists['channels'] = {}
         top_offset, _bottom, self.channel_info = 5, None, dict()
 
-        for i, param in enumerate(params):
+        for i, param in enumerate(self.params):
             _top = top_offset + (i * 16)
             _bottom, widget = self._add_info_box(_top, ChannelInfo, param)
             self.channel_info[param.id]: ChannelInfo = widget
 
-        if not rest:
-            # self.white_quality: WhiteCalculations = self._add_info_box(
-            #     69, WhiteCalculations, first
-            # )[-1]
-            pass
+        # self.white_quality: WhiteCalculations = self._add_info_box(
+        #     69, WhiteCalculations, first
+        # )[-1]
 
-    @functools.singledispatchmethod
+    @singledispatchmethod
     def update(self, msg):
         raise ValueError(f'type {type(msg)} {msg} not recognized')
 
@@ -444,7 +440,7 @@ class Plot(Root):
 
     @update.register
     def _(self, msg: LightingDUT) -> None:
-        self.unit_info.set_result(msg.option or '', msg.sn, msg.mn)
+        self.unit_info.set_result(f'option: {msg.option}', msg.sn, msg.mn)
 
     @update.register
     def _(self, msg: LightingStation3LightMeasurement) -> None:

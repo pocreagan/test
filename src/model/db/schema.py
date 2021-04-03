@@ -30,7 +30,7 @@ from sqlalchemy.sql.sqltypes import LargeBinary
 from sqlalchemy.sql.sqltypes import String
 from sqlalchemy.sql.sqltypes import Text
 
-from model.configuration import get_configs_on_object
+from src.model.configuration import get_configs_on_object
 from src.base.db.connection import SessionType
 from src.base.db.meta import *
 from src.model.enums import *
@@ -151,7 +151,9 @@ class YamlFile(Schema):
 
     @classmethod
     def update_object(cls, session: SessionType, obj) -> None:
-        [_c.update_from(cls.get(session, _c.fp)) for _c in get_configs_on_object(obj)]
+        [_c.update_from(
+            cls.get(session, _c.original_fp)
+        ) for _c in get_configs_on_object(obj)]
 
 
 lighting_station3_rows_association_table = Relationship.association(
@@ -175,13 +177,13 @@ class LightingStation3Param(Schema):
     rows = lighting_station3_rows_association_table.parent
 
     @classmethod
-    def get(cls, session: SessionType, name: str) -> List['LightingStation3ParamRow']:
+    def get(cls, session: SessionType, name: str) -> 'LightingStation3Param':
         result = session.query(cls).filter(
             cls.name == name, cls.rev == session.query(func.max(AppConfigUpdate.id)).scalar_subquery()
         ).one_or_none()
         if not result:
             raise ValueError(f'{name} deprecated or not present in the {cls.__name__} table')
-        return list(sorted(result.rows, key=attrgetter('row_num')))
+        return result
 
 
 class LightingStation3ParamRow(Schema):

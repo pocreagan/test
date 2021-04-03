@@ -255,4 +255,4 @@ class Station3(TestStation):
 
 
 if __name__ == '__main__':
-    Station3.debug_test(LightingDUT(12701575, 918, 'b'))
+    Station3.debug_test(LightingDUT(sn=12701575, mn=918, option='b'))

@@ -13,7 +13,7 @@ MULTIPLIER = 1.
 
 
 def make_make_font(fp: str, weight: str = 'normal'):
-    @functools.cache
+    @functools.lru_cache(maxsize=None)
     def make_font(size: int) -> FontProperties:
         kwargs = dict(fname=fp, size=float(size) * MULTIPLIER, weight=weight)
         return FontProperties(**kwargs)

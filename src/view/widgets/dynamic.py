@@ -5,6 +5,7 @@ from tkinter import font
 from typing import *
 
 # from model.resources import APP
+from model.resources import APP
 from model.resources import COLORS
 from model.resources import RESOURCE
 from src.base.log import logger
@@ -26,6 +27,7 @@ __all__ = [
     'WIDGET_TYPE',
 ]
 
+from view.chart.base import Root
 
 log = logger(__name__)
 
@@ -271,14 +273,11 @@ class Chart(Cell):
         _dpi = self.parent.screen.dpi
 
         _import_path = APP.STATION.import_path
-        _import_path = ('lighting', 'LL3')
-        chart_package = dynamic_import('chart', *_import_path)
-        _fake_data_cla = getattr(chart_package, 'FakeData')
-        _plot_cla = getattr(chart_package, 'Plot')
+        _import_path = ('stations', 'lighting', 'station3')
+        chart_module = dynamic_import('chart', *_import_path)
+        _plot_cla: Root = getattr(chart_module, 'Plot')
 
         _fake_mn = 938
-        self.fake_data = _fake_data_cla(_fake_mn)
-        self.interval = 1
 
         self.plot = _plot_cla(self.fake_data.params,
                               w=self.w_co, h=self.h_co, dpi=_dpi, color=_bg, mn=_fake_mn)

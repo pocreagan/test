@@ -83,12 +83,12 @@ class Widget:
         self._propagate('reset_results')
 
 
-class Root(Widget):
+class Root(Widget, Generic[_T]):
     tk_widget: Optional[tk.Frame]
     canvas: Optional[FigureCanvasTkAgg]
     background_img: Optional[FigureImage]
 
-    def __init__(self, params: dict, w: int = 1429, h: int = 799,
+    def __init__(self, params: _T, w: int = 1429, h: int = 799,
                  dpi: int = 141, color: str = '#000000', **kwargs) -> None:
         Widget.__init__(self)
 
@@ -106,8 +106,10 @@ class Root(Widget):
             figsize=(self.w / self.dpi, self.h / self.dpi),
             dpi=self.dpi, facecolor=self.face_color,
         )
-        self.gs = self.fig.add_gridspec(nrows=90, ncols=160, left=0,
-                                        right=1, top=1, bottom=0, hspace=0, wspace=0)
+
+        self.gs = self.fig.add_gridspec(
+            nrows=90, ncols=160, left=0, right=1, top=1, bottom=0, hspace=0, wspace=0
+        )
 
         self.properties = kwargs
         self.artists = {}
@@ -166,17 +168,17 @@ class Root(Widget):
         pass
 
 
-class Region(Widget):
+class Region(Widget, Generic[_T]):
     def axis_manipulation(self) -> None:
         raise NotImplementedError
 
-    def __init__(self, parent, axis: plt.Axes = None, **kwargs) -> None:
+    def __init__(self, parent: Union['Region'[_T], Root[_T]], axis: plt.Axes = None, **kwargs) -> None:
         Widget.__init__(self)
 
         self.parent = parent
         self.parent.children.append(self)
 
-        self.ax = axis or self.parent.ax
+        self.ax: plt.Axes = axis or self.parent.ax
 
         self.config = kwargs
 
@@ -192,7 +194,7 @@ class Region(Widget):
         return self.parent.artists
 
     @property
-    def params(self) -> dict:
+    def params(self) -> _T:
         return self.parent.params
 
     def _set_background(self) -> None:

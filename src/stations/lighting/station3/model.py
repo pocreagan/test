@@ -1,12 +1,13 @@
 from dataclasses import dataclass
 from dataclasses import field
+from operator import attrgetter
 from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
 from typing import Type
 
-from model import configuration
+from src.model import configuration
 from src.base.db.connection import SessionManager
 from src.base.db.connection import SessionType
 from src.instruments.dc_power_supplies import connection_states
@@ -39,6 +40,7 @@ class Station3TestModel:
     initial_config_object: Optional[Configuration] = None
     final_config_object: Optional[Configuration] = None
     firmware_object: Optional[Firmware] = None
+    params_obj: Optional[LightingStation3Param] = None
     string_params_rows: List[LightingStation3Param] = field(default_factory=list)
 
 
@@ -78,7 +80,8 @@ class Station3Model:
             if option:
                 config_dict.update(model_options.get(option, {}))
         model = Station3TestModel(**config_dict)
-        model.string_params_rows = LightingStation3Param.get(session, model.param_sheet)
+        model.params_obj = LightingStation3Param.get(session, model.param_sheet)
+        model.string_params_rows = list(sorted(model.params_obj.rows, key=attrgetter('row_num')))
         model.connection_calc_type = getattr(connection_states, model.connection_calc)
         for initial, cfg_name in enumerate(['final_config', 'initial_config']):
             cfg_sheet_name = getattr(model, cfg_name)
