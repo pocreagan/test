@@ -11,6 +11,13 @@ from src.view.chart import helper
 from src.view.chart.abstract_widgets import RoundedTextOneLine
 from src.view.chart.base import *
 
+__all__ = [
+    'UnitInfo',
+    'ConfigData',
+    'TestStatus',
+]
+
+
 log = logger(__name__)
 
 UNIT_OFFSET = 0.15
@@ -22,8 +29,6 @@ UNIT_LABELS_FONT = font.bold(30)
 
 
 class UnitInfo(Region):
-    # TODO: background image switches on model number
-
     def axis_manipulation(self) -> None:
         helper.clear_garbage(self.ax)
         self.ax.set(aspect="equal")
@@ -35,7 +40,6 @@ class UnitInfo(Region):
         )
 
     def _init_results(self) -> None:
-        # TODO: add <option> display
         _kwargs = dict(ha='center', va='center', color='white')
         self.artists['unit_data'] = {
             'sn_mn': self.var(self.ax.text(

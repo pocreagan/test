@@ -52,34 +52,26 @@ class ChartDebugWindow(tk.Tk):
             self._chart = self._plot.for_tk(self)
             self._chart.update()
 
-        self.bind('<Return>', self.start_animation)
+        self.bind('a', self.start_animation)
         self.bind('o', self.one_shot)
+        self.bind('c', self.init_chart)
         self.bind('q', self.close)
-        self.bind('i', self.init_chart)
 
     def init_chart(self, *_: tk.EventType) -> None:
-        self.cancel_scheduled()
+        [self.cancel_scheduled() for _ in range(10000)]
         with LogTimeElapsed('plot initialized'):
             self._plot.init()
             self._chart.update()
         self.update()
 
     def start_animation(self, *_: tk.EventType) -> None:
-        self._message_iter = iter(self._messages)
         self.init_chart()
-        self._stopped = False
+        self._message_iter = iter(self._messages)
         self._poll_scheduled = self.after_idle(self.poll)
 
-    def update_chart(self, message) -> None:
-        with LogTimeElapsed('plot updated'):
-            self._plot(message)
-            self._chart.update()
-
     def one_shot(self, *_: tk.EventType) -> None:
-        self._stopped = True
         self.init_chart()
         with LogTimeElapsed('plot populated'):
-            # list(map(self._plot, self._messages))
             self._plot.populate_from_iteration(self._messages[-1])
             self._chart.update()
         self.update()
@@ -91,11 +83,14 @@ class ChartDebugWindow(tk.Tk):
         except StopIteration:
             pass
 
-        except Exception:
-            self.close()
-            raise
+        except Exception as e1:
+            try:
+                self.close()
+            except Exception as e2:
+                raise e1 from e2
+            raise e1
 
         else:
-            if not self._stopped:
-                self.update_chart(message)
-                self._poll_scheduled = self.after_idle(self.poll)
+            self._plot(message)
+            self._chart.update()
+            self._poll_scheduled = self.after_idle(self.poll)

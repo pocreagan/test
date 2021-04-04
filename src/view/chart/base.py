@@ -3,7 +3,6 @@ from itertools import chain
 from pathlib import Path
 from typing import *
 
-import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib import cbook
@@ -12,6 +11,7 @@ from matplotlib.image import FigureImage
 
 from src.base.log import logger
 from src.view.chart.helper import timer
+from src.view.chart.helper import matplotlib_config
 
 log = logger(__name__)
 
@@ -103,9 +103,7 @@ class Root(Widget, Generic[_T]):
         self.dpi = dpi
         self.face_color = color
 
-        matplotlib.use("TkAgg")
-        matplotlib.rcParams['toolbar'] = 'None'
-        matplotlib.rcParams['font.family'] = 'Linotype Univers 430 Regular'
+        matplotlib_config()
 
         self.fig: plt.Figure = plt.figure(
             figsize=(self.w / self.dpi, self.h / self.dpi),
@@ -153,6 +151,7 @@ class Root(Widget, Generic[_T]):
         self._initialized = self._initialized or self.init_results() or True
         self.reset_results()
         self._bg = self._bg or self.canvas.copy_from_bbox(self.canvas.figure.bbox)
+        self.draw_artists()
 
     def draw_artists(self) -> None:
         self.canvas.restore_region(self._bg)
