@@ -26,7 +26,7 @@ __all__ = [
 
 log = logger(__name__)
 
-_RECORD = Dict[str, [int, bool, datetime.datetime, str, str]]
+_RECORD = Dict[str, Union[int, bool, datetime.datetime, str, str]]
 _RECORDS = List[_RECORD]
 _RECORD_DICT = Dict[int, _RECORD]
 _RECORD_ID_SET = Set[int]
@@ -199,6 +199,8 @@ class History(Cell):
     _dt_ft: str = RESOURCE.cfg('view')['widget_constants']['Time']['DT_FORMAT']
     _pad: int = 2
     _last_results_fresh: bool
+    _current_button_width: Optional[int]
+    vbar_packed: bool
 
     def __post_init__(self):
         # initialize state variables
@@ -308,6 +310,7 @@ class History(Cell):
             if _timestamp > _now:
                 self._hour_ids.add(id_)
                 _timestamp -= _now
+                _timestamp: datetime
                 self.after(int(_timestamp.total_seconds() * 1000), self.remove_from_hour, id_)
 
             # passed or failed
@@ -515,8 +518,8 @@ class History(Cell):
         """
         self.width = self.winfo_width()
         self.scrolled_width = self.width - self.vbar.winfo_width()
-        self._kws |= dict(height=self._h, width=self.scrolled_width,
-                          font=self.font)
+        self._kws.update(dict(height=self._h, width=self.scrolled_width,
+                              font=self.font))
         self.perform_controller_action(self, 'all')
 
     @staticmethod
@@ -526,7 +529,7 @@ class History(Cell):
         """
         _button = evt.widget  # type: ignore
         invoke = getattr(_button, 'invoke', None)
-        if invoke:
+        if callable(invoke):
             with_enabled(_button)(invoke)()
 
 

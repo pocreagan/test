@@ -252,7 +252,7 @@ class MessageHandler:
 
             task = self.pick_scheduled_task()
             if task:
-                task.__perform_task()
+                task.perform()
                 return True
 
         return False

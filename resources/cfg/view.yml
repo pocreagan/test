@@ -45,7 +45,7 @@ old_colors:
 
 
 window:
-  padding: 0.01
+  PADDING: 0.01
   POLLING_INTERVAL_MS: 10
   FORCE_TOPMOST: true
   resolution: !!python/tuple [ 1920, 1080 ]
@@ -89,7 +89,7 @@ hid:
 FONT_SIZE_MULTIPLIER: 1.0
 
 
-font_size:
+FONTSIZE:
   LOGO: 24
   TESTSTEPS: 24
   HISTORYPARTNUMBER: 28

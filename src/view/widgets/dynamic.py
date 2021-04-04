@@ -38,14 +38,14 @@ class Logging(Cell):
     """
 
     def __post_init__(self):
-        self._update_interval = RESOURCE.cfg('general')['LOG_DISPLAY_UPDATE_INTERVAL_MS']
+        self._update_interval = APP.G['LOG_DISPLAY_UPDATE_INTERVAL_MS']
         self.font = font.nametofont('TkFixedFont')
-        self.font.config(size=RESOURCE.cfg('view')['FONTSIZE']['LOGGING'])
+        self.font.config(size=APP.V['FONTSIZE']['LOGGING'])
         self.vbar = Scrollbar(self)
 
         bg_ = COLORS.black
         self.text = tk.Text(self, state='disabled', wrap='none', relief='flat', cursor='arrow',
-                            fg=APP.V.COLORS.text.normal, bg=bg_,
+                            fg=COLORS.white, bg=bg_,
                             selectbackground=bg_, inactiveselectbackground=bg_,
                             font=self.font, yscrollcommand=self.vbar.set)
 
@@ -53,7 +53,7 @@ class Logging(Cell):
         self.vbar.pack(side=tk.RIGHT, fill=tk.Y)
         self.text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         self._length = 0
-        self._max_length = APP.G.LOG_HISTORY_LEN
+        self._max_length = APP.G['LOG_HISTORY_LEN']
 
     def _on_show(self):
         """
@@ -107,7 +107,11 @@ class Instruments(Cell):
         """
         widget: Label
         state: str
-        _colors = APP.V.COLORS.instrument
+        _colors = {
+            'checking': COLORS.white,
+            'bad': COLORS.red,
+            'good': COLORS.green,
+        }
 
         def update(self, state: str) -> None:
             """
@@ -144,7 +148,7 @@ class Instruments(Cell):
         """
         self.disable()
         [v.update('checking') for v in self.instruments.values()]
-        self.perform_controller_action(self, 'check')
+        # self.perform_controller_action(self, 'check')
 
     def check_all_done(self) -> None:
         """
@@ -182,8 +186,8 @@ class Instruction(Cell):
         self.set('-', '')
 
     def __post_init__(self):
-        _maj = self._make_font(APP.V.FONTSIZE.INSTRUCTION_MAJOR)
-        _min = self._make_font(APP.V.FONTSIZE.INSTRUCTION_MINOR)
+        _maj = self._make_font(APP.V['FONTSIZE']['INSTRUCTION_MAJOR'])
+        _min = self._make_font(APP.V['FONTSIZE']['INSTRUCTION_MINOR'])
         self._notification_interval: int = self.constants['NOTIFICATION_INTERVAL_MS']
         self.major: Label = self._load(Label(self, font=_maj), 'major_widget')
         self.minor: Message = self._load(Message(self, justify='center', font=_min,

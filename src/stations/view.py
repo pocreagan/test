@@ -1,12 +1,12 @@
 from typing import *
 
-from framework.model import *
-from framework.view.base.placement import *
-from framework.view.view import View
-from framework.view.widgets.dynamic import *
-from framework.view.widgets.history import *
-from framework.view.widgets.static import *
-from framework.view.base.helper import File
+from src.base.log import logger
+from src.view.base.placement import *
+from src.view.view import View
+from src.view.widgets.dynamic import *
+from src.view.widgets.history import *
+from src.view.widgets.static import *
+from src.view.base.helper import File
 
 __all__ = [
     'LightingView',
@@ -75,7 +75,7 @@ class LightingView(View):
 
         # # bottom
         # left
-        WidgetPosition(Instruments, _Instruments),
+        # WidgetPosition(Instruments, _Instruments),
 
         # right
         WidgetPosition(TitleBar, _StatusBar),

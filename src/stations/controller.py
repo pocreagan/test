@@ -1,4 +1,4 @@
-from framework.controller.controller import Controller
+from src.controller.controller import Controller
 
 __all__ = [
     'LightingController',

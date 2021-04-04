@@ -133,6 +133,14 @@ class App:
         """
         return RESOURCE.cfg('general')
 
+
+    @lazy_access
+    def V(self) -> Dict:
+        """
+        general constants from ini
+        """
+        return RESOURCE.cfg('view')
+
     @lazy_access
     def STATION(self) -> _Station:
         return _Station()

@@ -9,6 +9,7 @@ from src.base.concurrency.message import ControllerAction
 from src.base.concurrency.message import Message
 from src.base.concurrency.message import ViewAction
 from src.base.log import logger
+from src.model.resources import APP
 
 __all__ = [
     'Controller',
@@ -17,7 +18,7 @@ __all__ = [
 
 log = logger(__name__)
 
-TEST_RUN_D_T = Dict[str, [int, bool, datetime.datetime, str, str]]
+TEST_RUN_D_T = Dict[str, Union[int, bool, datetime.datetime, str, str]]
 
 
 class BoolDict(dict):
@@ -180,7 +181,7 @@ class Controller(parent_terminus(ControllerAction, ViewAction), Process):
         [o.poll() for o in self.children]
 
     def __post_init__(self):
-        self._poll_delay_s = APP.G.POLLING_INTERVAL_MS / 1000
+        self._poll_delay_s = APP.G['POLLING_INTERVAL_MS'] / 1000
         self.perform_view_action = getattr(self, '_perform_other_action')
 
         self.children = list()
@@ -188,7 +189,7 @@ class Controller(parent_terminus(ControllerAction, ViewAction), Process):
         self.mode = Mode(self)
         self.history = History(self)
         self.test_steps = TestSteps(self)
-        self.instruments = Instruments(self, APP.STATION.instruments)
+        # self.instruments = Instruments(self, APP.STATION.instruments)
 
         logger.to_main_process(self._log_q).start()
         Process.__post_init__(self)

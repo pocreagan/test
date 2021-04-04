@@ -48,7 +48,7 @@ class Cell(ChildTerminus, tk.Frame):
     @property
     def font(self) -> tk.font.Font:
         if not self.__font:
-            f: int = self._view_config['font_size'][self.__class__.__name__.upper()]
+            f: int = self._view_config['FONTSIZE'][self.__class__.__name__.upper()]
             if f:
                 self.__font = self._make_font(f)
             else:
@@ -96,7 +96,7 @@ class Cell(ChildTerminus, tk.Frame):
 
         # compute relative dimensions
         x, y, w, h = self.pos
-        _y_pad = self._view_config['window']['padding']
+        _y_pad = self._view_config['window']['PADDING']
         _x_pad = _y_pad / self.parent.screen.w_h_ratio
         _y_shift, _x_shift = _y_pad if y == 0 else 0, _x_pad if x == 0 else 0
         _rel_x = x + _x_shift
