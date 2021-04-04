@@ -7,7 +7,7 @@ from typing import List
 from typing import Optional
 from typing import Type
 
-from model.db.schema import AppConfigUpdate
+from src.model.db.schema import AppConfigUpdate
 from src.base.db.connection import SessionManager
 from src.base.db.connection import SessionType
 from src.instruments.dc_power_supplies import connection_states
@@ -58,7 +58,7 @@ class Station3ModelBuilder:
 
     def __call__(self) -> Dict[int, Dict[Optional[str], Station3Model]]:
         with self.session_manager(expire=False) as session:
-            latest_rev = AppConfigUpdate.get(session)
+            latest_rev = AppConfigUpdate.get(session).id
             if latest_rev > self.last_rev:
                 self.last_rev = latest_rev
                 YamlFile.update_object(session, self)

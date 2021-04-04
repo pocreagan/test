@@ -87,6 +87,10 @@ class Rel:
         'LightingStation3ResultRow',
         'test_iteration'
     )
+    lighting_dut_station3_iterations = Relationship.one_to_many(
+        'LightingDUT', 'lighting_station3_iterations',
+        'LightingStation3Iteration', 'dut',
+    )
     version_to_code = Relationship.one_to_one('FirmwareVersion', 'code', 'FirmwareCode', 'version')
 
 
@@ -103,11 +107,6 @@ lighting_station3_firmware_iteration_association = Relationship.association(
 lighting_station3_config_iteration_association = Relationship.association(
     Schema, 'LightingStation3Iteration', 'config_iterations',
     'EEPROMConfigIteration', 'lighting_station3_iteration',
-)
-
-lighting_station3_lighting_dut_association = Relationship.association(
-    Schema, 'LightingStation3Iteration', 'dut',
-    'LightingDUT', 'lighting_station3_iteration',
 )
 
 
@@ -176,7 +175,7 @@ class LightingDUT(Schema):
     sn = Column(Integer, nullable=False)
     mn = Column(Integer, nullable=False)
     option = Column(String(128), nullable=True)
-    lighting_station3_iteration = lighting_station3_lighting_dut_association.child
+    lighting_station3_iterations = Rel.lighting_dut_station3_iterations.parent
 
     __table_args__ = (UniqueConstraint('sn', 'mn', 'option'),)
 
@@ -383,15 +382,15 @@ _T = TypeVar('_T')
 
 class LightingStation3Iteration(Schema):
     _repr_fields = ['p_f', 'created_at']
-    dut = lighting_station3_lighting_dut_association.parent
+    dut_id = LightingDUT.id_fk()
+    dut = Rel.lighting_dut_station3_iterations.child
     unit_identity_confirmations = lighting_station3_unit_identity_confirmation_association.parent
     firmware_iterations = lighting_station3_firmware_iteration_association.parent
     config_iterations = lighting_station3_config_iteration_association.parent
     result_rows = Rel.lighting_station3_iteration_results.parent
     pf = Column(Boolean, default=False)
 
-    __collection_map = {'LightingDUT': 'dut',
-                        'LightingStation3ResultRow': 'result_rows',
+    __collection_map = {'LightingStation3ResultRow': 'result_rows',
                         'ConfirmUnitIdentityIteration': 'unit_identity_confirmations',
                         'FirmwareIteration': 'firmware_iterations',
                         'EEPROMConfigIteration': 'config_iterations', }

@@ -1,5 +1,6 @@
 from datetime import datetime
 from operator import attrgetter
+from time import sleep
 from typing import List
 from typing import Type
 from typing import Union
@@ -12,12 +13,12 @@ from src.instruments.base.instrument import instruments_joined
 from src.instruments.base.instrument import instruments_spawned
 from src.instruments.dc_power_supplies import DCLevel
 from src.instruments.dc_power_supplies.bk_ps import BKPowerSupply
-from src.instruments.dc_power_supplies.connection_states import ConnectionState
 from src.instruments.dc_power_supplies.connection_states import ConnectionStateCalcType
 from src.instruments.light_meter import LightMeasurement
 from src.instruments.light_meter import LightMeter
 from src.instruments.light_meter import LightMeterError
 from src.instruments.light_meter import ThermalDropSample
+from src.instruments.wet.rs485 import MicroState
 from src.instruments.wet.rs485 import RS485
 from src.instruments.wet.rs485 import RS485Error
 from src.instruments.wet.rs485 import WETCommandError
@@ -49,6 +50,7 @@ class Station3(TestStation):
     model_builder_t = Station3ModelBuilder
     model_builder: Station3ModelBuilder
     model: Station3Model
+    iteration_t = LightingStation3Iteration
     iteration: LightingStation3Iteration
     unit: LightingDUT
 
@@ -169,29 +171,26 @@ class Station3(TestStation):
         return unit_identity_confirmation_model
 
     @instruments_joined
-    def connection_state(self, calc: Type[ConnectionStateCalcType]) -> ConnectionState:
-        connection = self.ps.calculate_connection_state(calc)
+    def perform_connection_check(self) -> None:
+        connection = self.ps.calculate_connection_state(self.model.connection_calc_type)
         if not bool(connection):
-            raise TestFailure(f'failed connection state check: {connection}')
+            raise TestFailure(f'failed power connection check: {connection}')
 
-        return connection
+        self.emit(connection)
+
+        if self.model.firmware is not None:
+            micro_state = self.ftdi.get_micro_state()
+            if micro_state == MicroState.NO_BOOTLOADER:
+                raise TestFailure('failed to establish communication with the chroma')
+
+            self.emit(micro_state)
 
     @instruments_spawned
-    def perform_test(self) -> LightingStation3Iteration:
-        self.iteration = LightingStation3Iteration()
-        self.iteration.add(self.unit)
-
+    def perform_test(self) -> None:
         remaining_rows = self.model.string_params_rows.copy()
-
-        self.connection_state(self.model.connection_calc_type)
 
         # program and thermal as indicated
         if self.model.firmware is not None:
-            # check for chroma communication, if no bootloader at least that's a test failure
-            # noinspection PyUnresolvedReferences
-            if not self.ftdi.wet_at_least_bootloader().resolve():
-                raise TestFailure('failed to establish communication with the chroma')
-
             firmware_iteration_model = self.iteration.add(FirmwareIteration(
                 firmware_id=self.model.firmware_object.version_id,
             ))
@@ -232,13 +231,25 @@ class Station3(TestStation):
             self.configure(self.model.final_config_object, False)
 
         self.iteration.pf = all(map(attrgetter('pf'), self.iteration.result_rows))
+        if not self.iteration.pf:
+            raise TestFailure('failed light checks')
 
     @classmethod
     def debug_test(cls, unit: LightingDUT) -> None:
         with logger:
             station = Station3(connect(echo_sql=True))
             station.instruments_setup()
-            station.run(unit)
+            station.setup(unit)
+            try:
+                for f_name in ('connection_check', 'run'):
+                    sleep(1.)
+                    print('\n\n')
+                    input(f'proceed with {f_name}? -> ')
+                    print('\n\n')
+                    getattr(station, f_name)
+
+            except KeyboardInterrupt:
+                pass
 
 
 if __name__ == '__main__':

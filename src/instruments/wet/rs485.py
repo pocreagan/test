@@ -1,6 +1,7 @@
 from collections import Counter
 from collections import defaultdict
 from dataclasses import dataclass
+from enum import auto
 from enum import Enum
 from functools import wraps
 from itertools import count
@@ -34,6 +35,7 @@ __all__ = [
     'WETNoResponseError',
     'RS485',
     'RS485Error',
+    'MicroState',
 ]
 
 
@@ -100,6 +102,12 @@ class OrphanCheckResult:
     no_discovery: bool
     old_firmware: bool
     bootloader: bool
+
+
+class MicroState(Enum):
+    NO_BOOTLOADER = auto()
+    BOOTLOADER = auto()
+    FIRMWARE = auto()
 
 
 class _CRC:
@@ -464,8 +472,12 @@ class RS485(Instrument):
             return True
 
     @proxy.exposed
-    def wet_at_least_bootloader(self) -> bool:
-        return self.wet_responds_to_sn_query() or self.dta_boot_reset()
+    def get_micro_state(self) -> MicroState:
+        if self.wet_responds_to_sn_query():
+            return MicroState.FIRMWARE
+        if self.dta_boot_reset():
+            return MicroState.BOOTLOADER
+        return MicroState.NO_BOOTLOADER
 
     def wet_old_sn_query_any_response(self) -> bool:
         self.ser.send(self._old_wet_sn_query)

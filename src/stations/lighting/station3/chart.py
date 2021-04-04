@@ -3,8 +3,6 @@ from itertools import chain
 from operator import attrgetter
 from typing import *
 
-import matplotlib
-import matplotlib.axes
 from matplotlib.collections import PatchCollection
 from matplotlib.patches import Circle
 from matplotlib.patches import FancyBboxPatch
@@ -31,11 +29,13 @@ from src.view.chart.concrete_widgets import TestStatus
 from src.view.chart.concrete_widgets import UnitInfo
 from src.view.chart.debug_window import ChartDebugWindow
 
-log = logger(__name__)
 
-matplotlib.use("TkAgg")
-matplotlib.rcParams['toolbar'] = 'None'
-matplotlib.rcParams['font.family'] = 'Linotype Univers 430 Regular'
+__all__ = [
+    'Plot',
+]
+
+
+log = logger(__name__)
 
 STEP_RIGHT_EDGE = .25
 THERM_XI = .05
@@ -72,9 +72,6 @@ CHART_LABELS_FONT = font.normal(11)
 CH_INFO_FONT_VALUE = font.bold(8)
 CH_INFO_FONT_SPEC = font.normal(8)
 
-__all__ = [
-    'Plot',
-]
 
 _string_colors = {
     'Full On': colors.CH_COLORS['T100'],
@@ -472,10 +469,6 @@ class Plot(Root):
             _bottom, widget = self._add_info_box(_top, ChannelInfo, param)
             self.channel_info[param.id]: ChannelInfo = widget
 
-        # self.white_quality: WhiteCalculations = self._add_info_box(
-        #     69, WhiteCalculations, first
-        # )[-1]
-
     @singledispatchmethod
     def update(self, msg):
         raise ValueError(f'type {type(msg)} {msg} not recognized')
@@ -503,13 +496,10 @@ class Plot(Root):
         self.channel_info[self.current_param.id].set_value(msg)
         self.bar_chart.set_result(msg)
         self.increment_param_row()
-
         # TODO: white quality might need implemented
-        # if 'W' in k:
-        #     self.white_quality.set_from_color_point(x, y)
 
     def populate_from_iteration(self, record: LightingStation3Iteration) -> None:
-        self.update(record.dut[0])
+        self.update(record.dut)
         for meas in iteration.result_rows:  # type: LightingStation3ResultRow
             thermal: List[LightingStation3LightMeasurement] = measurement.light_measurements
             self.big_chart.thermal.populate_from_list(thermal)
@@ -524,7 +514,7 @@ if __name__ == '__main__':
             params = LightingStation3Param.get(session, '918 brighter')
             rows = list(sorted(params.rows, key=attrgetter('row_num')))
             iteration: LightingStation3Iteration = session.query(LightingStation3Iteration).first()
-            dut = LightingDUT(sn=9000000, mn=918, option='bright')
+            dut: LightingDUT = iteration.dut
             messages = [dut]
             for measurement in iteration.result_rows:  # type: LightingStation3ResultRow
                 messages.extend([*measurement.light_measurements, measurement])

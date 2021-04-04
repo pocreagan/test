@@ -73,7 +73,7 @@ _T = TypeVar('_T')
 class ConfigUpdate:
     kwargs = dict(
         # echo_sql=True,
-        # drop_tables=True,
+        drop_tables=True,
     )
     params_objects = ((r'lighting/station3/params.xlsx', LightingStation3Param, LightingStation3ParamRow),)
     new: int

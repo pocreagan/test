@@ -5,11 +5,10 @@ from typing import Callable
 from typing import Dict
 from typing import Generic
 from typing import Optional
-from typing_extensions import Protocol
 from typing import Type
 from typing import TypeVar
 
-from typing_extensions import Literal
+from typing_extensions import Protocol
 
 from src.base.db.connection import SessionManager
 from src.base.db.connection import SessionType
@@ -113,13 +112,18 @@ class TestStep(Generic[_STEP_MODEL_T]):
             self.session.flush()
 
 
-class TestStation(instrument.InstrumentHandler, Logged):
-    model_builder_t: Type
-    model_builder: Any
+_IT = TypeVar('_IT')
+_MT = TypeVar('_MT')
+
+
+class TestStation(instrument.InstrumentHandler, Logged, Generic[_MT, _IT]):
+    model_builder_t: Type[_MT]
+    model_builder: _MT
+    iteration_t: Type[_IT]
+    iteration: _IT
     session_manager: SessionManager
     unit: DUTIdentityModel
     model: dataclass
-    iteration: Any
     session: SessionType
     config: Dict[str, Any]
 
@@ -133,10 +137,6 @@ class TestStation(instrument.InstrumentHandler, Logged):
         # noinspection PyTypeChecker
         self.model_builder = self.model_builder_t(self.session_manager)
 
-    def test_failure(self, msg) -> Literal[False]:
-        self.emit(msg)
-        return False
-
     def emit(self, msg: _T) -> _T:
         """
         send test updates to view, for example
@@ -147,14 +147,29 @@ class TestStation(instrument.InstrumentHandler, Logged):
     def on_test_failure(self, e: Exception) -> None:
         self.emit(str(e))
 
-    def run(self, unit: DUTIdentityModel):
+    def setup(self, unit: DUTIdentityModel) -> None:
         self.unit = unit
         self.model = self.model_builder.for_dut(self.unit)
+
+    def connection_check(self) -> None:
+        try:
+            self.perform_connection_check()
+
+        except TestFailure as e:
+            self.on_test_failure(e)
+
+        except Exception as e:
+            raise StationFailure(str(e)) from e
+
+    def run(self):
+        self.iteration = self.iteration_t()
+        self.iteration.dut = self.unit
         try:
             self.perform_test()
 
         except TestFailure as e:
             self.on_test_failure(e)
+            self.connection_check()
 
         except Exception as e:
             raise StationFailure(str(e)) from e
@@ -163,6 +178,13 @@ class TestStation(instrument.InstrumentHandler, Logged):
             session.add(self.iteration)
 
         return self.iteration
+
+    def perform_connection_check(self) -> None:
+        """
+        once DUT and test model have been set, check for connection
+        raise TestFailure if connection is not proven
+        """
+        raise NotImplementedError
 
     def perform_test(self) -> None:
         """
