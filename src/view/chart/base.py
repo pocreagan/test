@@ -151,6 +151,7 @@ class Root(Widget, Generic[_T]):
         self._initialized = self._initialized or self.init_results() or True
         self.reset_results()
         self._bg = self._bg or self.canvas.copy_from_bbox(self.canvas.figure.bbox)
+        self.draw_artists()
 
     def draw_artists(self) -> None:
         self.canvas.restore_region(self._bg)
