@@ -151,6 +151,16 @@ class TestStation(instrument.InstrumentHandler, Logged, Generic[_MT, _IT]):
         self.unit = unit
         self.model = self.model_builder.for_dut(self.unit)
 
+    def cooldown_check(self) -> None:
+        try:
+            self.perform_cooldown_check()
+
+        except TestFailure as e:
+            self.on_test_failure(e)
+
+        except Exception as e:
+            raise StationFailure(str(e)) from e
+
     def connection_check(self) -> None:
         try:
             self.perform_connection_check()
@@ -178,6 +188,13 @@ class TestStation(instrument.InstrumentHandler, Logged, Generic[_MT, _IT]):
             session.add(self.iteration)
 
         return self.iteration
+
+    def perform_cooldown_check(self) -> None:
+        """
+        after dut has been set, check for previous test times
+        raise TestError if DUT was tested too recently
+        """
+        raise NotImplementedError
 
     def perform_connection_check(self) -> None:
         """

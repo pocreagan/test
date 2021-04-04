@@ -93,7 +93,7 @@ class _Station:
         _from_enum = RESOURCE.cfg('general').get('tests')[category][enum]
         human = _from_enum['human_readable']
         self.category = category
-        self.import_path = (category, station.name)
+        self.import_path = ('src', 'stations', category, station.name)
         self.resolution = resolution
         self.hostname = hostname
         self.human_readable = human

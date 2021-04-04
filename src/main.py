@@ -4,11 +4,13 @@ from src.model.load import dynamic_import
 from src.model.resources import APP, logger
 
 
+# noinspection PyUnresolvedReferences
 def hidden_imports() -> None:
     """
     explicit import statements needed in main.py for binary build module discovery
-    importing in function scope to prevent unnecessary imports on controller spawn
+    importing in function scope to prevent unnecessary imports at runtime
     """
+    from src.stations.lighting import station3
 
 
 def main() -> None:
@@ -35,7 +37,7 @@ def main() -> None:
         view = station_view(controller.q)
 
         # start main process record handlers
-        logger.format().to_window(view).start()
+        logger.format().to_console().to_window(view).start()
 
         # add widgets, set to initial state, and run Tk mainloop (blocking in this thread)
         view.start()

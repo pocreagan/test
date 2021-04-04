@@ -172,12 +172,17 @@ lighting_station3_rows_association_table = Relationship.association(
 
 class LightingDUT(Schema):
     _repr_fields = ['sn', 'mn', 'option']
-    sn = Column(Integer, nullable=False)
+    sn = Column(Integer, nullable=False, unique=True)
     mn = Column(Integer, nullable=False)
     option = Column(String(128), nullable=True)
     lighting_station3_iterations = Rel.lighting_dut_station3_iterations.parent
 
-    __table_args__ = (UniqueConstraint('sn', 'mn', 'option'),)
+    @classmethod
+    def get_or_make(cls, session: SessionType, sn: int, mn: int, option: str) -> 'LightingDUT':
+        result = session.query(cls).filter_by(sn=sn).one_or_none()
+        if result is None:
+            result = session.make(cls(sn=sn, mn=mn, option=option))
+        return result
 
 
 class LightingStation3Param(Schema):
@@ -398,6 +403,14 @@ class LightingStation3Iteration(Schema):
     def add(self, obj: _T) -> _T:
         getattr(self, self.__collection_map[type(obj).__name__]).append(obj)
         return obj
+
+    @classmethod
+    def is_cooldown_done(cls, session: SessionType, dut: LightingDUT, cooldown_interval: float) -> bool:
+        result = session.query(cls).filter_by(dut_id=dut.id).order_by(cls.created_at).one_or_none()
+        print(result)
+        if result is None:
+            return True
+        return (datetime.datetime.now() - datetime.timedelta(seconds=cooldown_interval)) > result.created_at
 
 
 class LightingStation3ResultRow(Schema):

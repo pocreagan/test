@@ -2,7 +2,6 @@ from datetime import datetime
 from operator import attrgetter
 from time import sleep
 from typing import List
-from typing import Type
 from typing import Union
 
 from attrdict import AttrDict
@@ -13,7 +12,6 @@ from src.instruments.base.instrument import instruments_joined
 from src.instruments.base.instrument import instruments_spawned
 from src.instruments.dc_power_supplies import DCLevel
 from src.instruments.dc_power_supplies.bk_ps import BKPowerSupply
-from src.instruments.dc_power_supplies.connection_states import ConnectionStateCalcType
 from src.instruments.light_meter import LightMeasurement
 from src.instruments.light_meter import LightMeter
 from src.instruments.light_meter import LightMeterError
@@ -171,6 +169,16 @@ class Station3(TestStation):
         return unit_identity_confirmation_model
 
     @instruments_joined
+    def perform_cooldown_check(self) -> None:
+        with self.session_manager() as session:
+            ready_to_test = LightingStation3Iteration.is_cooldown_done(
+                session, self.unit, self.model.cooldown_interval_s
+            )
+        print(ready_to_test)
+        if not ready_to_test:
+            raise TestFailure('cooldown period has not elapsed')
+
+    @instruments_joined
     def perform_connection_check(self) -> None:
         connection = self.ps.calculate_connection_state(self.model.connection_calc_type)
         if not bool(connection):
@@ -241,12 +249,15 @@ class Station3(TestStation):
             station.instruments_setup()
             station.setup(unit)
             try:
-                for f_name in ('connection_check', 'run'):
-                    sleep(1.)
-                    print('\n\n')
-                    input(f'proceed with {f_name}? -> ')
-                    print('\n\n')
-                    getattr(station, f_name)
+                while 1:
+                    for f_name in ('cooldown_check', 'connection_check', 'run'):
+                        sleep(1.)
+                        print('\n\n')
+                        user_input = input(f'proceed with {f_name}? -> ')
+                        if user_input.lower() != 'y':
+                            return
+                        print('\n\n')
+                        getattr(station, f_name)()
 
             except KeyboardInterrupt:
                 pass

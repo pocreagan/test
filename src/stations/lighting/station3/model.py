@@ -36,6 +36,7 @@ class Station3Model:
     firmware: Optional[str] = None
     unit_identity: Optional[bool] = None
     program_with_thermal: Optional[bool] = None
+    cooldown_interval_s: Optional[float] = None
     initial_config: Optional[str] = None
     final_config: Optional[str] = None
     firmware_force_overwrite: bool = False

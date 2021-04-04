@@ -9,7 +9,7 @@ from src.view.widgets.static import *
 from src.view.base.helper import File
 
 __all__ = [
-    'LightingView',
+    'StationView',
 ]
 
 log = logger(__name__)
@@ -46,7 +46,7 @@ _Build = Pos(1 - BUILD_W - TIME_W, _RIGHT_MAIN.bottom, BUILD_W, _BOTTOM_ROW)
 _StatusBar = Pos(_Stats.right, _RIGHT_MAIN.bottom, _RIGHT_MAIN.w - BUILD_W - TIME_W, _BOTTOM_ROW)
 
 
-class LightingView(View):
+class StationView(View):
     widgets = [
         # # top
         # left

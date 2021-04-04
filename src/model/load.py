@@ -74,6 +74,7 @@ class lazy_access(Generic[_T]):
         setattr(instance, self._f.__name__, v)
         return v
 
+
 def dynamic_import(module: str, *path_parts):
     from importlib import import_module
     return import_module(f'.{module}', '.'.join(path_parts))
