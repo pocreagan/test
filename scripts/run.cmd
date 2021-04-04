@@ -1,2 +1,3 @@
-@echo off
-"C:\Projects\test_framework\.venv\Scripts\python.exe" C:\Projects\test_framework\src\main.py
+cd c:\projects\test
+pipenv run python -m src.main
+if ERRORLEVEL 1 pause

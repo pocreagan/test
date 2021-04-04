@@ -29,6 +29,7 @@ __all__ = [
     'random_condition',
     'setdefault_attr',
     'setdefault_attr_from_factory',
+    'setdefault_attr_from_mro_or_factory',
     'time_func',
     'text_patrick',
     'test_nom_tol',
@@ -289,6 +290,18 @@ def setdefault_attr(o: object, k: str, v: _T) -> _T:
 # noinspection SpellCheckingInspection
 def setdefault_attr_from_factory(o: object, k: str, factory: Callable[[], _T]) -> _T:
     if not hasattr(o, k):
+        setattr(o, k, factory())
+    return getattr(o, k)
+
+
+_sentinel = object()
+
+
+# SUPPRESS-LINTER <to conform to builtin func names>
+# noinspection SpellCheckingInspection
+def setdefault_attr_from_mro_or_factory(o: object, k: str, factory: Callable[[], _T]) -> _T:
+    previous = getattr(o, k, _sentinel)
+    if previous is _sentinel:
         setattr(o, k, factory())
     return getattr(o, k)
 

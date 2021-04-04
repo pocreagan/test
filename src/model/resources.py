@@ -98,7 +98,6 @@ class _Station:
         self.hostname = hostname
         self.human_readable = human
         self.instruments = _from_enum['instruments']
-        self.scan_parsers = _from_enum['scan_parsers']
         self.combined_string = f'{hostname} [{human}]'
 
 

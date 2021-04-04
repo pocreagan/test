@@ -1,0 +1,2 @@
+bin\Testing.exe
+pause

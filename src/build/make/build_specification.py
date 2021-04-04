@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import shutil
 import sys
 from datetime import datetime
 from enum import auto
@@ -17,6 +18,9 @@ from key_generator.key_generator import generate
 __all__ = [
     'BuildSpecification',
 ]
+
+# TODO: sources copied to matplotlib/mpl-data, overwriting actual mpl-data
+# TODO: nothing on google, possibly cwd problem, not investigated
 
 
 class BuildSpecification:
@@ -61,19 +65,29 @@ class BuildSpecification:
     HIDDEN_IMPORTS: List[str] = None
     EXCLUDED_MODULES: List[str] = None
 
+    def make_resource_dir(self) -> None:
+        shutil.copytree(self.RESOURCE_DIR, self._TEMP_RESOURCE_DIR)
+        print('made temporary resource dir')
+
+    def clean_resource_dir(self) -> None:
+        shutil.rmtree(self._TEMP_RESOURCE_DIR)
+        print('removed temporary resource dir')
+
     def make_resource_paths(self, v: Path) -> str:
         v = v.resolve().absolute()
+        v = self._TEMP_RESOURCE_DIR / v.relative_to(self.RESOURCE_DIR)
         try:
             source = v.relative_to(self.SPEC_PATH)
-            dest = v.relative_to(self.RESOURCE_DIR)
+            dest = v.relative_to(self._TEMP_RESOURCE_DIR)
         except ValueError:
             s = 'FAILED TO INCLUDE %s: RESOURCES MUST BE CONTAINED IN %s'
-            print(s % (v, self.RESOURCE_DIR))
+            print(s % (v, self._TEMP_RESOURCE_DIR))
             exit()
         else:
-            if source.is_dir():
-                return f'{source}' + r'\*;' + f'{dest}'
-            return f'{source};{dest}'
+            is_dir = v.is_dir()
+            if is_dir:
+                return f'{source}' + r'\*;' + f'{source}'
+            return f'{source};{source}'
 
     def _make_paths(self):
         self._APPLICATION_ENTRY_POINT = self.APPLICATION_ENTRY_POINT + '.py'
@@ -83,6 +97,7 @@ class BuildSpecification:
         self.DESTINATION_PATH: Path = build_path / 'bin'
         self.WORKING_PATH: Path = build_path / 'dat'
         self._HOOKS_DIR: Path = self.WORKING_PATH / 'hooks'
+        self._TEMP_RESOURCE_DIR: Path = self.SPEC_PATH / self.RESOURCE_DIR.name
         self.BINARY_PATH: Path = self.DESTINATION_PATH / (self.APPLICATION_NAME + '.exe')
 
     def _make_debug(self):
@@ -125,7 +140,7 @@ class BuildSpecification:
                             is_present = required_path.exists()
                             is_good &= is_present
                             print(f'{path.relative_to(self.SPEC_PATH)} REQUIRES',
-                                  f'{required_path.relative_to(self.SPEC_PATH)} ->',
+                                  f'{required_path.relative_to(self.RESOURCE_DIR)} ->',
                                   'PRESENT' if is_present else 'ABSENT')
                             self._ADDITIONAL_FILES_OR_DIRS.append(Path(required_file))
 
@@ -149,6 +164,7 @@ class BuildSpecification:
         if not self._make_require():
             print('NOT ALL REQUIRED FILES AND DIRS ARE PRESENT')
             exit()
+        self.make_resource_dir()
         self._make_includes()
 
     @property
@@ -286,6 +302,7 @@ class BuildSpecification:
         finally:
             build_spec.cleanup_hooks()
             build_spec.cleanup_spec()
+            build_spec.clean_resource_dir()
 
         tf = datetime.now()
         seconds = (tf - ti).total_seconds()

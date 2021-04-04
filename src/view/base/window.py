@@ -225,7 +225,7 @@ class Window(tk.Tk):
                     return log.info(f'Window handled {msg}')
 
         self._q.put(msg)
-        log.debug(f'{msg} had no effect')
+        log.debug(f'{msg} had no effect in view')
 
     def poll(self) -> None:
         """

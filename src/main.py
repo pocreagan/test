@@ -1,7 +1,8 @@
 from multiprocessing import freeze_support
 
 from src.model.load import dynamic_import
-from src.model.resources import APP, logger
+from src.model.resources import APP
+from src.model.resources import logger
 
 
 # noinspection PyUnresolvedReferences
@@ -10,7 +11,7 @@ def hidden_imports() -> None:
     explicit import statements needed in main.py for binary build module discovery
     importing in function scope to prevent unnecessary imports at runtime
     """
-    from src.stations.lighting import station3
+    from src.stations.lighting.station3 import chart, view, controller, model, test
 
 
 def main() -> None:

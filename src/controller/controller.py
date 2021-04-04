@@ -1,19 +1,34 @@
 import datetime
+import re
 from random import choice
 from random import randint
 from typing import *
 
-from src.base.general import random_condition
+from controller.base.decorators import subscribe
 from src.base.concurrency.concurrency import *
 from src.base.concurrency.message import ControllerAction
 from src.base.concurrency.message import Message
 from src.base.concurrency.message import ViewAction
+from src.base.general import random_condition
 from src.base.log import logger
+from src.controller.base.decorators import scan_method
 from src.model.resources import APP
 
 __all__ = [
     'Controller',
 ]
+
+# TODO: history db->view
+# TODO: pubsub in View and Controller
+# TODO: add thread wrapping to TestStation
+# TODO: make test steps start, result, update messages
+# TODO: TE check and start test messages
+# TODO: test thread handler
+# TODO: try old matplotlib version for binary build
+# TODO: chart updates and FA methods/messages
+# TODO: make label program for new DUT scans
+# TODO: main CLI or system name -> test station package cfg map
+# TODO: sqlite -> postgres
 
 
 log = logger(__name__)
@@ -176,9 +191,42 @@ class TestSteps(CellCounterpart):
 
 
 class Controller(parent_terminus(ControllerAction, ViewAction), Process):
+    scan_methods: List[Tuple[str, re.Pattern]]
+    subscribed_methods: Dict[Type, str]
+    iteration_t: Type
+
     def poll(self) -> None:
         Process.poll(self)
         [o.poll() for o in self.children]
+
+    def scan(self, scan_string: str) -> None:
+        for f, pattern in self.scan_methods or []:
+            parsed = pattern.findall(scan_string)
+            if parsed:
+                log.info(f'handling scan -> {f}{tuple(parsed[0])}')
+                return getattr(self, f)(*parsed[0])
+
+        log.info(f'unhandled scan -> {scan_string}')
+
+    def get_history(self) -> None:
+        raise NotImplementedError
+
+    def add_one_to_history(self) -> None:
+        raise NotImplementedError
+
+    def change_mode(self, mode) -> None:
+        raise NotImplementedError
+
+    def te_check(self) -> None:
+        raise NotImplementedError
+
+    @scan_method(re.compile(r'(?i)\[DUT#\|(\d{5}):(\d{8})]'))
+    def old_dut_scan(self, mn: int, sn: int) -> None:
+        pass
+
+    @scan_method(re.compile(r'(?i)\[DUT\|(\d{5}):(\d{8}):(.{12})]'))
+    def dut_scan(self, mn: int, sn: int, option: str) -> None:
+        pass
 
     def __post_init__(self):
         self._poll_delay_s = APP.G['POLLING_INTERVAL_MS'] / 1000

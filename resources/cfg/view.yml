@@ -58,8 +58,7 @@ hid:
       START_CHAR: "["
       END_CHAR: "]"
       KEYPRESS: "(?i)[0-9a-z:\\[\\]|#]"
-      DUT: "(?i)\\[DUT#\\|(\\d{5}):(\\d{8})\\]"
-      OPTION: "(?i)\\[OPT\\|(\\d):(\\d{5}):(\\d{3})\\]"
+      SCAN: "(?i)\\[(.+)\\]"
     bindings:
       capture:
         capture: "<Key>"

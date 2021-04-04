@@ -31,15 +31,12 @@ tests:
     station1:
       human_readable: PCBA
       instruments: !!python/tuple [ Daq, BkPowerSupply, Camera ]
-      scan_parsers: !!python/tuple [ DUT, OPTION ]
     station2:
       human_readable: Leak
       instruments: !!python/tuple [ NfcProbe, LeakTester ]
-      scan_parsers: !!python/tuple [ DUT, OPTION ]
     station3:
       human_readable: Light
       instruments: !!python/tuple [ Rs485, BkPowerSupply, LightMeter ]
-      scan_parsers: !!python/tuple [ DUT, OPTION ]
 
 
 LOG_HISTORY_LEN: 1000

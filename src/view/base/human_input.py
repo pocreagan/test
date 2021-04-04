@@ -116,13 +116,6 @@ class Keyboard(Binding):
         special_character_d = self.bindings['special_character']
         self.special_keys = {special_k_re.findall(v)[0]: k for k, v in special_character_d.items()}
 
-        self.parse_funcs: List[Tuple[re.Pattern, str]] = []
-        for k in APP.STATION.scan_parsers:
-            # compile ini regex and map to method name, ex: ..., 'dut_scan'
-            f, _re = f'{k.lower()}_scan', RESOURCE.cfg('view')['hid']['keyboard']['re'][k]
-            self.parse_funcs.append((re.compile(_re), f))
-            log.debug(f'added parser "{_re}" -> {f}')
-
     def clear(self) -> None:
         """
         reset state
@@ -140,15 +133,6 @@ class Keyboard(Binding):
             method(*args)
         else:
             self.parent.handle_keyboard_action(message.KeyboardAction(f, *args))
-
-    def parse(self, s: str) -> None:
-        """
-        try each parser defined by station and handle first match
-        """
-        for pattern, f in self.parse_funcs:
-            parsed = pattern.findall(s)
-            if parsed:
-                return self.handle(f, *parsed[0])
 
     # bound methods
     def special_character(self, evt: tk.EventType) -> None:
@@ -169,14 +153,14 @@ class Keyboard(Binding):
             elif self._keypress_re.search(c):
                 self.scan_string += c
                 if c == self._end_char:
-                    self.parse(self.scan_string)
+                    self.parent.perform_controller_action(None, 'scan', self.scan_string)
 
     # hid-level special character handlers
     def paste(self) -> None:
         """
         grabs clipboard and handles contents as if they were typed into the window
         """
-        self.parse(self.parent.clipboard_get())
+        self.parent.perform_controller_action(None, 'scan', self.parent.clipboard_get())
 
     def copy(self) -> None:
         """
