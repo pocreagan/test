@@ -179,6 +179,7 @@ class Station3(TestStation):
     @instruments_spawned
     def perform_test(self) -> LightingStation3Iteration:
         self.iteration = LightingStation3Iteration()
+        self.iteration.add(self.unit)
 
         remaining_rows = self.model.string_params_rows.copy()
 

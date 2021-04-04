@@ -4,6 +4,7 @@ from operator import attrgetter
 from typing import *
 
 import matplotlib
+import matplotlib.axes
 from matplotlib.collections import PatchCollection
 from matplotlib.patches import Circle
 from matplotlib.patches import FancyBboxPatch
@@ -182,11 +183,9 @@ class Thermal(Region):
     def set_result(self, meas: LightingStation3LightMeasurement) -> None:
         x = self.artists['x_results_d'][self.current_param.id]
         y = self.artists['y_results_d'][self.current_param.id]
-        x_co = ((1 - ((meas.pct_drop * 100) / self.current_param.pct_drop_max)) * THERM_DY) + THERM_YI
-        y_co = ((meas.te / self.current_param.duration) * THERM_DX) + THERM_XI
-        x.append(x_co)
-        y.append(y_co)
-        self.artists['therm'][self.current_param.id].set_data(y, x)
+        x.append(((meas.te / self.current_param.duration) * THERM_DX) + THERM_XI)
+        y.append(((1 - ((meas.pct_drop * 100) / self.current_param.pct_drop_max)) * THERM_DY) + THERM_YI)
+        self.artists['therm'][self.current_param.id].set_data(x, y)
 
     def _reset_results(self) -> None:
         [self.artists[k].clear() for k in ['x_results_d', 'y_results_d']]
@@ -197,11 +196,19 @@ class Thermal(Region):
     def populate_from_list(self, measurements: List[LightingStation3LightMeasurement]) -> None:
         x = self.artists['x_results_d'][self.current_param.id]
         y = self.artists['y_results_d'][self.current_param.id]
-        x_co, y_co = [], []
+        x.clear()
+        y.clear()
+        duration = self.current_param.duration
+        drop_max = self.current_param.pct_drop_max
+
+        te_multiplier = THERM_DX / duration
+        drop_multiplier = 100 / drop_max
+
         for meas in measurements:
-            x_co.append(((1 - ((meas.pct_drop * 100) / self.current_param.pct_drop_max)) * THERM_DY) + THERM_YI)
-            y_co.append(((meas.te / self.current_param.duration) * THERM_DX) + THERM_XI)
-        self.artists['therm'][self.current_param.id].set_data(y, x)
+            x.append((meas.te * te_multiplier) + THERM_XI)
+            y.append(((1 - (meas.pct_drop * drop_multiplier)) * THERM_DY) + THERM_YI)
+
+        self.artists['therm'][self.current_param.id].set_data(x, y)
 
 
 class BarChart(Region):
@@ -478,7 +485,7 @@ class Plot(Root):
         self.test_status.set_result_from_iteration(msg)
         fw_iterations: List[FirmwareIteration] = msg.firmware_iterations
         cfg_iterations: List[EEPROMConfigIteration] = msg.config_iterations
-        config_info = [fw.firmware.name for fw in fw_iterations]
+        config_info = [f'v{fw.firmware.version}' for fw in fw_iterations]
         config_info.extend(cfg.config.name for cfg in cfg_iterations)
         self.config_data.set_result(config_info)
 
@@ -502,11 +509,13 @@ class Plot(Root):
         #     self.white_quality.set_from_color_point(x, y)
 
     def populate_from_iteration(self, record: LightingStation3Iteration) -> None:
+        self.update(record.dut[0])
         for meas in iteration.result_rows:  # type: LightingStation3ResultRow
             thermal: List[LightingStation3LightMeasurement] = measurement.light_measurements
             self.big_chart.thermal.populate_from_list(thermal)
             self.update(meas)
         self.update(iteration)
+        self.draw_artists()
 
 
 if __name__ == '__main__':
@@ -514,11 +523,10 @@ if __name__ == '__main__':
         with connect(echo_sql=False)(expire=False) as session:
             params = LightingStation3Param.get(session, '918 brighter')
             rows = list(sorted(params.rows, key=attrgetter('row_num')))
-            iteration: LightingStation3Iteration = session.query(
-                LightingStation3Iteration
-            ).first()
+            iteration: LightingStation3Iteration = session.query(LightingStation3Iteration).first()
             dut = LightingDUT(sn=9000000, mn=918, option='bright')
-            measurement: LightingStation3ResultRow = iteration.result_rows[0]
-            light_measurements: List[LightingStation3LightMeasurement] = measurement.light_measurements
-            messages = [dut, *light_measurements, measurement, iteration]
-            window = ChartDebugWindow(Plot(rows, mn=918), 1, messages).mainloop()
+            messages = [dut]
+            for measurement in iteration.result_rows:  # type: LightingStation3ResultRow
+                messages.extend([*measurement.light_measurements, measurement])
+            messages.append(iteration)
+            window = ChartDebugWindow(Plot(rows, mn=dut.mn), messages).mainloop()

@@ -35,25 +35,25 @@ class ChartDebugWindow(tk.Tk):
         self.quit()
         self.destroy()
 
-    def __init__(self, plot: Root, poll_interval: int, messages: List) -> None:
+    def __init__(self, plot: Root, messages: List) -> None:
         tk.Tk.__init__(self, __name__)
         self.set_attribute('protocol', 'WM_DELETE_WINDOW', self.close)
         self.resizable(0, 0)
 
         self._plot = plot
-        self._poll_interval = poll_interval
         self._messages = messages
         self._message_iter = None
         self._poll_scheduled = None
+        self._stopped = False
 
         with LogTimeElapsed('background set'):
             self._plot.set_background()
         with LogTimeElapsed('tk widget made'):
             self._chart = self._plot.for_tk(self)
-            self.update()
+            self._chart.update()
 
         self.bind('<Return>', self.start_animation)
-        self.bind('a', self.one_shot)
+        self.bind('o', self.one_shot)
         self.bind('q', self.close)
         self.bind('i', self.init_chart)
 
@@ -61,25 +61,28 @@ class ChartDebugWindow(tk.Tk):
         self.cancel_scheduled()
         with LogTimeElapsed('plot initialized'):
             self._plot.init()
-            self.update()
+            self._chart.update()
+        self.update()
 
     def start_animation(self, *_: tk.EventType) -> None:
         self._message_iter = iter(self._messages)
         self.init_chart()
-        self._poll_scheduled = self.after(self._poll_interval, self.poll)
+        self._stopped = False
+        self._poll_scheduled = self.after_idle(self.poll)
 
     def update_chart(self, message) -> None:
         with LogTimeElapsed('plot updated'):
             self._plot(message)
-            self.update()
+            self._chart.update()
 
     def one_shot(self, *_: tk.EventType) -> None:
-        print(self._messages[-1])
-        [self.cancel_scheduled() for _ in range(100)]
+        self._stopped = True
         self.init_chart()
         with LogTimeElapsed('plot populated'):
+            # list(map(self._plot, self._messages))
             self._plot.populate_from_iteration(self._messages[-1])
-            self.update()
+            self._chart.update()
+        self.update()
 
     def poll(self) -> None:
         try:
@@ -93,5 +96,6 @@ class ChartDebugWindow(tk.Tk):
             raise
 
         else:
-            self.update_chart(message)
-            self._poll_scheduled = self.after(self._poll_interval, self.poll)
+            if not self._stopped:
+                self.update_chart(message)
+                self._poll_scheduled = self.after_idle(self.poll)

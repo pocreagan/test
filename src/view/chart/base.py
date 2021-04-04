@@ -154,17 +154,23 @@ class Root(Widget, Generic[_T]):
         self.reset_results()
         self._bg = self._bg or self.canvas.copy_from_bbox(self.canvas.figure.bbox)
 
+    def draw_artists(self) -> None:
+        self.canvas.restore_region(self._bg)
+        list(map(self.canvas.figure.draw_artist, self.animated))
+        self.canvas.blit(self.canvas.figure.bbox)
+
     def __call__(self, iteration_data: List[ITERATION_DATA]):
         if hasattr(iteration_data, '__iter__'):
             list(map(self.update, iteration_data))
         else:
             self.update(iteration_data)
-        self.canvas.restore_region(self._bg)
-        list(map(self.canvas.figure.draw_artist, self.animated))
-        self.canvas.blit(self.canvas.figure.bbox)
+        self.draw_artists()
 
     def _set_background(self) -> None:
         pass
+
+    def populate_from_iteration(self, iteration) -> None:
+        raise NotImplementedError
 
     def _init_results(self) -> None:
         pass

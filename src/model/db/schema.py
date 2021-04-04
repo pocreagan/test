@@ -105,6 +105,11 @@ lighting_station3_config_iteration_association = Relationship.association(
     'EEPROMConfigIteration', 'lighting_station3_iteration',
 )
 
+lighting_station3_lighting_dut_association = Relationship.association(
+    Schema, 'LightingStation3Iteration', 'dut',
+    'LightingDUT', 'lighting_station3_iteration',
+)
+
 
 class AppConfigUpdate(Schema):
     _repr_fields = ['created_at']
@@ -171,6 +176,7 @@ class LightingDUT(Schema):
     sn = Column(Integer, nullable=False)
     mn = Column(Integer, nullable=False)
     option = Column(String(128), nullable=True)
+    lighting_station3_iteration = lighting_station3_lighting_dut_association.child
 
     __table_args__ = (UniqueConstraint('sn', 'mn', 'option'),)
 
@@ -377,13 +383,15 @@ _T = TypeVar('_T')
 
 class LightingStation3Iteration(Schema):
     _repr_fields = ['p_f', 'created_at']
+    dut = lighting_station3_lighting_dut_association.parent
     unit_identity_confirmations = lighting_station3_unit_identity_confirmation_association.parent
     firmware_iterations = lighting_station3_firmware_iteration_association.parent
     config_iterations = lighting_station3_config_iteration_association.parent
     result_rows = Rel.lighting_station3_iteration_results.parent
     pf = Column(Boolean, default=False)
 
-    __collection_map = {'LightingStation3ResultRow': 'result_rows',
+    __collection_map = {'LightingDUT': 'dut',
+                        'LightingStation3ResultRow': 'result_rows',
                         'ConfirmUnitIdentityIteration': 'unit_identity_confirmations',
                         'FirmwareIteration': 'firmware_iterations',
                         'EEPROMConfigIteration': 'config_iterations', }
@@ -391,18 +399,6 @@ class LightingStation3Iteration(Schema):
     def add(self, obj: _T) -> _T:
         getattr(self, self.__collection_map[type(obj).__name__]).append(obj)
         return obj
-
-    def resolve(self) -> 'LightingStation3Iteration':
-        identity_confirms: List[ConfirmUnitIdentityIteration] = self.unit_identity_confirmations
-        config_iterations: List[EEPROMConfigIteration] = self.config_iterations
-        firmware_iterations: List[FirmwareIteration] = self.firmware_iterations
-        _ = [it.firmware for it in firmware_iterations]
-        _ = [it.config for it in config_iterations]
-        rows: List[LightingStation3ResultRow] = self.result_rows
-        param_rows: List[LightingStation3ParamRow] = [row.param_row for row in rows]
-        _ = [row.light_measurements for row in rows]
-        _ = [row.params for row in param_rows]
-        return self
 
 
 class LightingStation3ResultRow(Schema):
