@@ -128,8 +128,9 @@ class TestStation(instrument.InstrumentHandler, Logged, Generic[_MT, _IT]):
     config: Dict[str, Any]
 
     def __init__(self, session_manager: SessionManager,
-                 view_emit: Callable = None) -> None:
-        self._emit = view_emit if callable(view_emit) else self.info
+                 controller_q: Callable = None, controller_flag = None) -> None:
+        self._emit = controller_q if callable(controller_q) else self.info
+        self._controller_flag = controller_flag
         self.session_manager = session_manager
         with self.session_manager() as session:
             [YamlFile.update_object(session, inst) for inst in chain([self], self.instruments.values())]
