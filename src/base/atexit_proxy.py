@@ -14,6 +14,10 @@ _process = current_process().name
 if _process == 'MainProcess':
     from atexit import register, unregister
 
+
+    def perform(logger=None) -> None:
+        _ = logger
+
 else:
     _registered_funcs: Dict[int, Tuple[Callable, Tuple, Dict]] = {}
     _lock = threading.RLock()
@@ -33,6 +37,8 @@ else:
 
     def perform(logger=None) -> None:
         with _lock:
+            if hasattr(logger, 'info'):
+                logger.info(f'performing atexit funcs in {_process}')
             for f, args, kwargs in _registered_funcs.values():
                 # SUPPRESS-LINTER <catch and log all errors>
                 # noinspection PyBroadException

@@ -2,6 +2,8 @@ import tkinter as tk
 from functools import wraps
 from tkinter import ttk
 from typing import Callable
+from typing import Optional
+from typing import Union
 
 from src.base.general import chain
 from src.base.log import logger
@@ -253,7 +255,7 @@ STEP_SIZE_PX = 100
 
 
 class StepProgress(tk.Frame):
-    def __init__(self, parent, text: str, max_val: int, h: int, **kwargs) -> None:
+    def __init__(self, parent, text: str, h: int, **kwargs) -> None:
         self.parent = parent
 
         self.labels = list()
@@ -262,25 +264,29 @@ class StepProgress(tk.Frame):
         super().__init__(parent, bg=COLORS.black, height=h, **kwargs)
 
         self.label = Label(self, bg=COLORS.dark_grey)
-        self.label.text(text)
+        self._original_text = text
+        self.label.text(self._original_text)
         self.label.pack(fill=tk.BOTH, expand=1)
 
         self.progress_bar: ProgressBar = ProgressBar(self, self.parent.w_co)
-        self.progress_bar.setup(max_val)
 
-    def start_progress(self) -> None:
+    def start_progress(self, minor_text: str, max_val: Optional[Union[int, float]]) -> None:
+        self.minor_text(minor_text)
+        if max_val is not None:
+            self.progress_bar.setup(max_val)
         self.label.color(COLORS.white, COLORS.black)
         self.progress_bar.pack(fill=tk.X, expand=1)
 
     def set_progress(self, value: float) -> None:
         self.progress_bar.set(value)
 
-    def end_progress(self, color) -> None:
+    def minor_text(self, minor_text: str) -> None:
+        self.label.text(f'{self._original_text} - {minor_text}')
+
+    def end_progress(self, success: Optional[bool]) -> None:
         self.progress_bar.pack_forget()
+        if success is None:
+            color = COLORS.white
+        else:
+            color = COLORS.green if success else COLORS.red
         self.label.color(color, COLORS.dark_grey)
-
-    def result_pass(self) -> None:
-        self.end_progress(COLORS.green)
-
-    def result_fail(self) -> None:
-        self.end_progress(COLORS.red)

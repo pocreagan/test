@@ -70,7 +70,7 @@ class StationView(View):
         WidgetPosition(History, _History),
 
         # right
-        WidgetPosition(Logging, _RIGHT_MAIN),
+        # WidgetPosition(Logging, _RIGHT_MAIN),
         WidgetPosition(Chart, _RIGHT_MAIN),
 
         # # bottom

@@ -1,16 +1,26 @@
 import collections
 import datetime
 import tkinter as tk
+from dataclasses import asdict
 from dataclasses import dataclass
 from functools import partial
+from itertools import starmap
 from typing import *
 
 from src.base.log import logger
 from src.model.resources import COLORS
 from src.model.resources import RESOURCE
+from src.model.vc_messages import GetMetricsMessage
+from src.model.vc_messages import HistoryAddEntryMessage
+from src.model.vc_messages import HistorySelectEntryMessage
+from src.model.vc_messages import HistorySetAllMessage
+from src.model.vc_messages import MetricsMessage
+from src.model.vc_messages import ModeChangeMessage
+from src.model.vc_messages import StationMode
 from src.view.base.cell import *
 from src.view.base.component import Label
 from src.view.base.component import Scrollbar
+from src.view.base.decorators import subscribe
 from src.view.base.helper import with_enabled
 from src.view.base.image_funcs import make_circle_glyph
 
@@ -78,14 +88,12 @@ class Mode(Cell):
         self._set(name)
         self.fresh_data()
 
-    def handle_response(self, msg: ModeChangeMessage) -> None:
+    @subscribe(ModeChangeMessage)
+    def handle_response(self, mode: StationMode) -> None:
         """
         do something when controller returns mode change request
         """
-        self.set(self.next_state if msg.is_success else self.state)
-        # if msg.is_success:
-        #     if self.state == self.testing_str:
-        # self.parent_widget(History).enable_double_clicking()
+        self.set(mode.name.lower())
 
     def get_fresh_data(self):
         """
@@ -99,7 +107,7 @@ class Mode(Cell):
         # widget.disable_double_clicking()
 
         self.object.config(**self._settings[self.checking_str].config_d)
-        self.perform_controller_action(self, 'change', self.next_state, callback=self.handle_response)
+        self.publish(ModeChangeMessage(StationMode[self.next_state.upper()]))
 
     def _on_show(self):
         self.get_fresh_data()
@@ -134,12 +142,13 @@ class Metrics(Cell):
         [getattr(self, f'label_{row}').text(f) for row, f in zip(range(2), ['h', 'd'])]
         [self._set_row('text', ('-', '-', '-%'), i) for i in range(2)]
         self._numbers = -1, -1, -1, -1
+        self.publish(GetMetricsMessage())
 
     def double_click(self, evt: tk.EventType):
         _ = evt
         self.disable()
         [self._set_row('color', self._checking_colors, row) for row in range(2)]
-        self.perform_controller_action('history', 'all')
+        self.publish(GetMetricsMessage())
 
     @staticmethod
     def _fail_pct(p: int, f: int) -> str:
@@ -175,6 +184,7 @@ class Metrics(Cell):
         [getattr(getattr(self, f'{name}_{row}'), f)(v) for name, v in zip(self._names, args)]
         self._last_settings[k] = args
 
+    @subscribe(MetricsMessage)
     def set_numbers(self, fail_hour: int, pass_hour: int, fail_day: int, pass_day: int) -> None:
         """
         if stats have changed since last update, updates text display lines
@@ -223,6 +233,7 @@ class History(Cell):
         self.__last_results = set()
         self._elisions = dict()
         self._buttons = list()
+        self._id_to_button_map = dict()
         self._p_f_dict = {
             HistoryPassFail.pass_string: self._pass_ids,
             HistoryPassFail.fail_string: self._fail_ids
@@ -286,26 +297,24 @@ class History(Cell):
         )
         button['command'] = partial(self._button_selected, record=record, button=button)
         self._buttons.append(button)
+        self._id_to_button_map[record['id']] = button
         return button
 
-    def add_record(self, record: _RECORD) -> None:
+    def add_record(self, id: int, pf: bool, dt: datetime, mn: str, sn: str) -> None:
         """
         add one record to the appropriate categories
         """
-        dt_ = record['dt']
-
+        id_ = id
         # happened today
-        if dt_ > self._midnight:
-            id_ = record['id']
-            sn_ = record['sn']
-
+        if dt > self._midnight:
             self._day_ids.add(id_)
+            record = dict(id=id_, pf=pf, dt=dt, mn=mn, sn=sn)
             self._lines[id_] = record
 
             # happened in the last hour
-            # _timestamp = dt_ + datetime.timedelta(hours=1)
+            # _timestamp = dt + datetime.timedelta(hours=1)
             # TODO remove this vvv
-            _timestamp = dt_ + datetime.timedelta(minutes=15)
+            _timestamp = dt + datetime.timedelta(minutes=15)
             _now = datetime.datetime.now()
             if _timestamp > _now:
                 self._hour_ids.add(id_)
@@ -314,20 +323,20 @@ class History(Cell):
                 self.after(int(_timestamp.total_seconds() * 1000), self.remove_from_hour, id_)
 
             # passed or failed
-            (self._pass_ids if record['pf'] else self._fail_ids).add(id_)
+            (self._pass_ids if pf else self._fail_ids).add(id_)
 
             # categorize by model number
-            self._model_ids[record['mn']].add(id_)
+            self._model_ids[mn].add(id_)
 
             # most recent result for this sn
-            v = self._day_sns.setdefault(sn_, (id_, dt_))
-            if v[1] < dt_:
-                self._day_sns[sn_] = v
+            v = self._day_sns.setdefault(sn, (id_, dt))
+            if v[1] < dt:
+                self._day_sns[sn] = v
                 self._last_results_fresh = True
 
             # create and tag visible record representation
             self.field.window_create(1.0, window=self._make_entry(record), **self._create_kws)
-            self.field.tag_add(str(record['id']), 1.0)
+            self.field.tag_add(str(id_), 1.0)
 
     def _last_results(self) -> _RECORD_ID_SET:
         """
@@ -440,7 +449,7 @@ class History(Cell):
         self.change_elision(_new_ids)
         self._vbar_visibility()
 
-    def _initialize_history(self, lines: _RECORDS) -> None:
+    def _initialize_history(self, lines: List[Dict[str, Any]]) -> None:
         """
         bulk process test history records
         """
@@ -464,15 +473,11 @@ class History(Cell):
         self._day_sns.clear()
         self._buttons.clear()
         self._elisions.clear()
+        self._id_to_button_map.clear()
         self._midnight = datetime.datetime.combine(datetime.date.today(), datetime.datetime.min.time())
 
         # make sub lists of record ids by category
-        list(map(self.add_record, lines))
-
-        # set callback to replace contents at next midnight
-        _timestamp = (datetime.timedelta(days=1, seconds=2) + self._midnight) - datetime.datetime.now()
-        _next_full_update = int(_timestamp.total_seconds() * 1000)
-        self.parent.after(_next_full_update, self.perform_controller_action, 'history', 'all')
+        [self.add_record(**line) for line in lines]
 
     def change_contents(self, f: Callable, *arg) -> None:
         """
@@ -492,11 +497,12 @@ class History(Cell):
             self.vbar.update()
             self.enable()
 
-    def add_one_to_history(self, line: _RECORD) -> None:
+    @subscribe(HistoryAddEntryMessage)
+    def add_one_to_history(self, id: int, pf: bool, dt: datetime, mn: str, sn: str) -> None:
         """
         add a record to the top of the text widget
         """
-        self.change_contents(self.add_record, line)
+        self.change_contents(self.add_record, id, pf, dt, mn, sn)
 
     def remove_from_hour(self, record_id: int) -> None:
         """
@@ -505,12 +511,13 @@ class History(Cell):
         if record_id in self._hour_ids:
             self.change_contents(self._hour_ids.remove, record_id)
 
-    def initialize_history(self, lines: _RECORDS) -> None:
+    @subscribe(HistorySetAllMessage)
+    def initialize_history(self, records: List[HistoryAddEntryMessage]) -> None:
         """
         check for new data
         perform init and then update display
         """
-        self.change_contents(self._initialize_history, lines)
+        self.change_contents(self._initialize_history, records)
 
     def _on_show(self) -> None:
         """
@@ -520,7 +527,10 @@ class History(Cell):
         self.scrolled_width = self.width - self.vbar.winfo_width()
         self._kws.update(dict(height=self._h, width=self.scrolled_width,
                               font=self.font))
-        self.perform_controller_action(self, 'all')
+
+    @subscribe(HistorySelectEntryMessage)
+    def select_button(self, id_: int) -> None:
+        self._id_to_button_map[id_].invoke()
 
     @staticmethod
     def double_click(evt: tk.EventType) -> None:
@@ -578,7 +588,7 @@ class _HistorySelect(Cell):
         setattr(_history, self._history_attr, self.current_option)
         _history.filter_and_update()
 
-    def set_options(self, options: List[str]) -> None:
+    def set_options(self, options: Union[bool, List[str], Set[int]]) -> None:
         """
         set non-initial settings from the History widget after populating initial history
         """

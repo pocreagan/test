@@ -36,7 +36,7 @@ class Testing(BuildSpecification):
 
     # PYINSTALLER FIXES
     HOOKS = None
-    HIDDEN_IMPORTS = None
+    HIDDEN_IMPORTS = ['sqlalchemy.sql.default_comparator',]
     EXCLUDED_MODULES = None
 
 

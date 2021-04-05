@@ -1,4 +1,5 @@
 import tkinter as tk
+from dataclasses import dataclass
 from pathlib import Path
 from tkinter.font import Font
 from typing import *
@@ -6,15 +7,16 @@ from typing import *
 import PIL
 from PIL import ImageTk
 
-from model.resources import COLORS
-from src.base.concurrency.concurrency import ChildTerminus
+from src.base import register
+from src.base.db.connection import SessionManager
 from src.base.general import do_if_not_done
 from src.base.log import logger
 from src.model.load import tuple_to_hex_color
+from src.model.resources import COLORS
 from src.model.resources import RESOURCE
 from src.view.base import component
 from src.view.base.placement import Category
-from src.view.base.window import Window
+from src.view.view import View
 
 __all__ = [
     'Cell',
@@ -23,14 +25,16 @@ __all__ = [
 
 log = logger(__name__)
 
+_T = TypeVar('_T', bound='Cell')
 
-class Cell(ChildTerminus, tk.Frame):
+
+class Cell(tk.Frame, register.Mixin):
     """
     wrapper around tk.Frame
     define _click(action) | _drag(action) to respond to mouse events in a widget
     """
     __font: tk.font.Font = None
-    parent: Window
+    parent: View
     is_enabled: bool = True
     content: tk.Label = None
     _view_config = RESOURCE.cfg('view')
@@ -44,15 +48,33 @@ class Cell(ChildTerminus, tk.Frame):
         tuple_to_hex_color((v, v, v)) for v in range(_greyscale['light'], _greyscale['medium'], -1)
     ]
     category: Category
+    subscribed_methods: Dict[Type, str]
+
+    def parent_widget(self, cls: Type[_T], *, fail_silently: bool = False) -> _T:
+        try:
+            return getattr(self.parent, cls.__name__.lower())
+        except AttributeError:
+            if not fail_silently:
+                raise
+
+    @register.after('__init__')
+    def _add_subscribed_methods_to_parent(self):
+        for _t, method_name in getattr(self, 'subscribed_methods', {}).items():
+            self.parent.subscribed_methods[_t].add((self.name, method_name))
+
+    @property
+    def publish(self):
+        return self.parent.publish
+
+    @property
+    def session_manager(self) -> SessionManager:
+        return self.parent.session_manager
 
     @property
     def font(self) -> tk.font.Font:
         if not self.__font:
             f: int = self._view_config['FONTSIZE'][self.__class__.__name__.upper()]
-            if f:
-                self.__font = self._make_font(f)
-            else:
-                self.__font = self.parent.font.tk_font
+            self.__font = self._make_font(f) if f else self.parent.font.tk_font
         return self.__font
 
     @font.setter
@@ -61,15 +83,13 @@ class Cell(ChildTerminus, tk.Frame):
 
     # SUPPRESS-LINTER <super().__init__ called immediately after first call of show()>
     # noinspection PyMissingConstructor
-    def __init__(self, name: str, parent: Window, x: float, y: float, w: float, h: float, ) -> None:
+    def __init__(self, name: str, parent: View, x: float, y: float, w: float, h: float, ) -> None:
         """
         calc relative dimensions using padding from ini
         calc actual frame dimensions in pixels for hid.Mouse
         make widget default font
         """
         self.parent = parent
-        self.perform_controller_action = self._perform_other_action
-
         self.name = name
         self.pos = x, y, w, h
         self._made = False

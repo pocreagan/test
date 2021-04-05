@@ -1,10 +1,20 @@
 import queue
+from collections import defaultdict
+from dataclasses import asdict
+from dataclasses import dataclass
+from typing import DefaultDict
+from typing import Dict
 from typing import Optional
+from typing import Set
+from typing import Tuple
+from typing import Type
+from typing import Union
 
+from src.base import register
 from src.base.concurrency.concurrency import *
-from src.base.concurrency.message import *
 from src.base.log import logger
 from src.base.log.objects import Handler
+from src.model.db import connect
 from src.model.resources import APP
 from src.view.base.window import Window
 
@@ -15,16 +25,23 @@ __all__ = [
 log = logger(__name__)
 
 
-class View(parent_terminus(ViewAction, ControllerAction), Window):  # type: ignore
+class View(Window):  # type: ignore
     log_deque: Optional[Handler.Deque] = None
 
     def __init__(self, q: ProcessConnection) -> None:
-        self._poll_interval = APP.G.get('POLLING_INTERVAL_MS')
+        self._poll_interval = APP.G['POLLING_INTERVAL_MS']
 
         self._q = q
         self._registered_messages = CallbackRegistry()
-        self.perform_controller_action = getattr(self, '_perform_other_action')
+        self.subscribed_methods: DefaultDict[Type, Set[Union[str, Tuple[str, str]]]] = defaultdict(set)
+        self.session_manager = connect()
+
         Window.__init__(self)
+
+    @register.after('__init__')
+    def _add_subscribed_methods_to_parent(self):
+        for _t, method_name in self.subscribed_methods.items():
+            self.parent.subscribed_methods[_t].add(method_name)
 
     def close(self) -> None:
         self._q.put_sentinel()
@@ -62,6 +79,31 @@ class View(parent_terminus(ViewAction, ControllerAction), Window):  # type: igno
         override hook
         """
         self._on_pipe_error()
+
+    def publish(self, message) -> None:
+        """
+        put message to controller queue
+        """
+        self._q.put(message)
+
+    def handle_message(self, message) -> None:
+        """
+        get method name from message type
+        execute it with args taken from message fields
+        """
+        methods = self.subscribed_methods.get(type(message), None)
+        if methods is None:
+            return log.warning(f'{message} from controller unhandled')
+        for method in methods:
+            if isinstance(method, tuple):
+                widget, method = method
+                method = getattr(getattr(self, widget), method)
+            else:
+                method = getattr(self, method, None)
+            if hasattr(message, '__dataclass_fields__'):
+                method(**asdict(message))
+            else:
+                method(message)
 
     def poll(self) -> None:
         """

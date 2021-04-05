@@ -1,21 +1,36 @@
 import tkinter as tk
 from dataclasses import dataclass
 from functools import partial
+from operator import attrgetter
 from tkinter import font
 from typing import *
 
-# from model.resources import APP
-from model.resources import APP
-from model.resources import COLORS
-from model.resources import RESOURCE
-from src.base.log import logger
 from src.base.general import truncate
-from src.model.load import dynamic_import
+from src.base.log import logger
+from src.model.db import connect
+from src.model.db.schema import LightingDUT
+from src.model.db.schema import LightingStation3Iteration
+from src.model.db.schema import LightingStation3LightMeasurement
+from src.model.db.schema import LightingStation3Param
+from src.model.db.schema import LightingStation3ResultRow
 from src.model.enums import MouseAction
+from src.model.load import dynamic_import
+from src.model.resources import APP
+from src.model.resources import COLORS
+from src.model.vc_messages import InstructionMessage
+from src.model.vc_messages import NotificationMessage
+from src.model.vc_messages import StepFinishMessage
+from src.model.vc_messages import StepMinorTextMessage
+from src.model.vc_messages import StepProgressMessage
+from src.model.vc_messages import StepsInitMessage
+from src.model.vc_messages import StepStartMessage
+from src.stations.lighting.station3.model import Station3ChartParamsModel
 from src.view.base.cell import *
 from src.view.base.component import *
-from src.view.base.helper import with_enabled
 from src.view.base.component import StepProgress
+from src.view.base.decorators import subscribe
+from src.view.base.helper import with_enabled
+from src.view.chart.base import Root
 
 __all__ = [
     'TestSteps',
@@ -26,8 +41,6 @@ __all__ = [
     'WIDGET',
     'WIDGET_TYPE',
 ]
-
-from view.chart.base import Root
 
 log = logger(__name__)
 
@@ -196,14 +209,6 @@ class Instruction(Cell):
         self.last_settings = '', '', None
         self.disable()
 
-    def set(self, major_text, minor_text, color=None):
-        """
-        exposed, saves settings and cancels scheduled notification reversion
-        """
-        self.last_settings = major_text, minor_text, color
-        self._set(major_text, minor_text, color)
-        self.cancel_scheduled()
-
     def _set(self, major, minor, color) -> None:
         """
         configures widget components based on args
@@ -225,12 +230,22 @@ class Instruction(Cell):
         """
         self._set(*self.last_settings)
 
-    def notify(self, major_text, minor_text, color=None):
+    @subscribe(InstructionMessage)
+    def set(self, major, minor, color=None):
+        """
+        exposed, saves settings and cancels scheduled notification reversion
+        """
+        self.last_settings = major, minor, color
+        self._set(major, minor, color)
+        self.cancel_scheduled()
+
+    @subscribe(NotificationMessage)
+    def notify(self, major, minor, color=None):
         """
         set instruction widget per args and revert to last settings after interval from ini
         """
         self.cancel_scheduled()
-        self._set(major_text, minor_text, color)
+        self._set(major, minor, color)
         self.schedule(self._notification_interval, self._revert)
 
 
@@ -238,29 +253,38 @@ class TestSteps(Cell):
     """
     show test step progress as it happens
     """
-    # TODO: this
     step_frames: Dict[str, StepProgress] = dict()
 
-    def make_steps(self, steps: Dict[str, int]) -> None:
-        log.info('making steps')
-        for i, (name, max_val) in enumerate(steps.items()):
-            self.step_frames[name] = widget = StepProgress(self, name, max_val, 66)
-            widget.pack(fill=tk.X, expand=0)
-
-    def increment(self, step: str) -> None:
-        self.step_frames[step].progress_bar.increment()
-
-    def result_pass(self, step: str) -> None:
-        self.step_frames[step].result_pass()
-
-    def result_fail(self, step: str) -> None:
-        self.step_frames[step].result_fail()
-
-    def start_progress(self, step: str) -> None:
-        self.step_frames[step].start_progress()
-
     def __post_init__(self):
-        self.perform_controller_action(self, 'get_steps')
+        pass
+
+    @subscribe(StepsInitMessage)
+    def make_steps(self, steps: List[str]) -> None:
+        log.info('making steps')
+        [widget.pack_forget() for widget in self.step_frames.values()]
+        [widget.destroy() for widget in self.step_frames.values()]
+        self.step_frames.clear()
+        for i, name in enumerate(steps):
+            self.step_frames[name] = widget = StepProgress(self, name, 66)
+            widget.pack(fill=tk.X, expand=0)
+            print(f'packed step -> {name}')
+
+    @subscribe(StepStartMessage)
+    def start_progress(self, step: str, minor_text: Optional[str],
+                       max_val: Optional[Union[int, float]]) -> None:
+        self.step_frames[step].start_progress(minor_text, max_val)
+
+    @subscribe(StepMinorTextMessage)
+    def set_minor_text(self, step: str, minor_text: str) -> None:
+        self.step_frames[step].minor_text(minor_text)
+
+    @subscribe(StepProgressMessage)
+    def set_progress(self, step: str, value: Union[int, float]) -> None:
+        self.step_frames[step].set_progress(value)
+
+    @subscribe(StepFinishMessage)
+    def end_progress(self, step: str, success: Optional[bool]) -> None:
+        self.step_frames[step].end_progress(success)
 
     def drag_h(self, action: MouseAction) -> Optional[bool]:
         return self.category.cycle(not action.direction)
@@ -270,71 +294,48 @@ class Chart(Cell):
     """
     show current or historical test data
     """
-    data_iter: Iterator
+    _bg = COLORS.black
 
     def __post_init__(self):
-        _bg = COLORS.black
-        _dpi = self.parent.screen.dpi
+        _plot_cla: Type[Root] = getattr(dynamic_import('chart', *APP.STATION.import_path), 'Plot')
 
-        _plot_cla: Root = getattr(dynamic_import('chart', *APP.STATION.import_path), 'Plot')
+        with connect(echo_sql=False)(expire=False) as session:
+            param = LightingStation3Param.get(session, '918 brighter')
+            iteration: LightingStation3Iteration = session.query(LightingStation3Iteration).first()
+            dut: LightingDUT = iteration.dut
 
-        _fake_mn = 938
+            params = Station3ChartParamsModel(
+                param_id=param.id, mn=dut.mn, rows=list(sorted(param.rows, key=attrgetter('row_num')))
+            )
 
-        self.plot = _plot_cla(self.fake_data.params,
-                              w=self.w_co, h=self.h_co, dpi=_dpi, color=_bg, mn=_fake_mn)
-        self.plot.set_background()
-        self.chart = self.plot.for_tk(self)
-        self.update()
+        self._plot = _plot_cla(params, w=self.w_co, h=self.h_co,
+                               dpi=self.parent.screen.dpi, color=self._bg)
 
     def _before_show(self) -> None:
-        """
-        make fake message generator
-        """
+        pass
 
-        def sim_data():
-            for msg in self.fake_data.messages:
-                yield [msg]
-
-        self.data_iter = sim_data()
-
-    def _on_hide(self):
-        """
-        stop fake data consumer
-        not necessary in production
-        """
-        self.cancel_scheduled()
+    def _on_hide(self) -> None:
+        pass
 
     def _on_show(self) -> None:
-        """
-        plot params-dependent stuff and start updating
-        """
-        log.info('load_chart called')
-        self.plot.init()
-        self.update()
-        self.schedule(self.interval, self.update_chart_data)
-        log.info('chart showing')
-
-    def update_chart(self, msg) -> None:
-        """
-        call directly from controller
-        """
-        self.plot(msg)
+        self._plot.set_background()
+        self._chart = self._plot.for_tk(self)
+        self._chart.update()
+        self._plot.init()
+        self._chart.update()
         self.update()
 
-    def update_chart_data(self):
+    @subscribe(LightingStation3LightMeasurement,
+               LightingStation3Iteration,
+               LightingDUT,
+               LightingStation3ResultRow, )
+    def update_chart_data(self, message):
         """
         get next message from fake message iterator
         and pretend it was received from controller
         """
-        try:
-            data = next(self.data_iter)
-
-        except StopIteration:
-            pass
-
-        else:
-            self.update_chart(data)
-            self.schedule(self.interval, self.update_chart_data)
+        self._plot(message)
+        self._chart.update()
 
     def _before_destroy(self):
         """
@@ -343,8 +344,8 @@ class Chart(Cell):
         import matplotlib.pyplot as plt
 
         try:
-            self.chart.destroy()
-            plt.close(self.plot.fig)
+            self._chart.destroy()
+            plt.close(self._plot.fig)
 
         except AttributeError:
             pass

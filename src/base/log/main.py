@@ -1,4 +1,3 @@
-import atexit
 import collections
 import logging
 import time
@@ -7,6 +6,7 @@ from multiprocessing import Queue
 from typing import cast, Callable
 from typing import Optional
 
+from src.base import atexit_proxy as atexit
 from src.base.general import chain
 from src.base.log.objects import *
 
@@ -18,9 +18,9 @@ __all__ = [
 class _Logger:
     """
     NORMAL USAGE:
-        ex: log = logger_(__name__)
+        ex: log = logger(__name__)
 
-    to set logger_ output, call .to_<destination> method
+    to set logger output, call .to_<destination> method
     """
 
     _root = 'app'

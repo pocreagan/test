@@ -31,6 +31,7 @@ from sqlalchemy.sql.sqltypes import LargeBinary
 from sqlalchemy.sql.sqltypes import String
 from sqlalchemy.sql.sqltypes import Text
 
+from model.vc_messages import MetricsMessage
 from src.base.db.connection import SessionType
 from src.base.db.meta import *
 from src.model.configuration import get_configs_on_object
@@ -172,7 +173,9 @@ lighting_station3_rows_association_table = Relationship.association(
 
 class LightingDUT(Schema):
     _repr_fields = ['sn', 'mn', 'option']
-    sn = Column(Integer, nullable=False, unique=True)
+    # TODO: LightingDUT should have a unique constraint in production
+    # sn = Column(Integer, nullable=False, unique=True)
+    sn = Column(Integer, nullable=False)
     mn = Column(Integer, nullable=False)
     option = Column(String(128), nullable=True)
     lighting_station3_iterations = Rel.lighting_dut_station3_iterations.parent
@@ -403,14 +406,6 @@ class LightingStation3Iteration(Schema):
     def add(self, obj: _T) -> _T:
         getattr(self, self.__collection_map[type(obj).__name__]).append(obj)
         return obj
-
-    @classmethod
-    def is_cooldown_done(cls, session: SessionType, dut: LightingDUT, cooldown_interval: float) -> bool:
-        result = session.query(cls).filter_by(dut_id=dut.id).order_by(cls.created_at).one_or_none()
-        print(result)
-        if result is None:
-            return True
-        return (datetime.datetime.now() - datetime.timedelta(seconds=cooldown_interval)) > result.created_at
 
 
 class LightingStation3ResultRow(Schema):

@@ -67,6 +67,9 @@ class Instrument(Logged, proxy.Mixin, register.Mixin):
         self._instrument_check_flags = []
         self.name = type(self).__qualname__
 
+    def instrument_add_check_flag(self, flag) -> None:
+        self._instrument_check_flags.append(flag)
+
     def instrument_check_flags(self) -> None:
         for flag in self._instrument_check_flags:
             if flag.is_set():

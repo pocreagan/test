@@ -1,5 +1,9 @@
 import tkinter as tk
-from typing import List
+from dataclasses import dataclass
+from dataclasses import fields
+from typing import Callable
+from typing import List, DefaultDict, Union, Dict, Type
+from typing_extensions import Literal
 
 from src.base.concurrency.message import *
 from src.base.log import logger
@@ -65,7 +69,9 @@ class Window(tk.Tk):
         """
         remove title bar, size window, and bind _on_move for lazy winfo_root access
         """
-        self.overrideredirect(True)
+        # TODO: uncomment this vvv
+        # self.overrideredirect(True)
+
         self.minsize(width=self.w_px, height=self.h_px)
         self.maxsize(width=self.w_px, height=self.h_px)
 

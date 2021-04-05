@@ -4,6 +4,7 @@ import tkinter as tk
 from functools import partial
 from typing import *
 
+from model.vc_messages import ScanMessage
 from src.model.resources import APP
 from src.model.resources import RESOURCE
 from src.base.concurrency import message
@@ -153,7 +154,7 @@ class Keyboard(Binding):
             elif self._keypress_re.search(c):
                 self.scan_string += c
                 if c == self._end_char:
-                    self.parent.perform_controller_action(None, 'scan', self.scan_string)
+                    self.parent.send_message(ScanMessage(self.scan_string))
 
     # hid-level special character handlers
     def paste(self) -> None:
