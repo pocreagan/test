@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import auto
 from enum import Enum
+from typing import Dict
 from typing import List
 from typing import Optional
 from typing import Union
@@ -76,31 +77,31 @@ class NotificationMessage:
 
 @dataclass
 class StepsInitMessage:
-    steps: List[str]
+    steps: Dict[int, str]
 
 
 @dataclass
 class StepStartMessage:
-    step: str
+    k: int
     minor_text: Optional[str] = None
     max_val: Optional[Union[int, float]] = None
 
 
 @dataclass
 class StepMinorTextMessage:
-    step: str
+    k: int
     minor_text: str
 
 
 @dataclass
 class StepProgressMessage:
-    step: str
+    k: int
     value: Union[int, float]
 
 
 @dataclass
 class StepFinishMessage:
-    step: str
+    k: int
     success: Optional[bool]
 
 

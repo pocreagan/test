@@ -65,34 +65,13 @@ class WETBadResponseError(WETCommandError):
     pass
 
 
-class ConfigUpdate:
-    pass
+@dataclass
+class ConfigIncrement:
+    i: int
 
 
 @dataclass
-class ConfigSetup(ConfigUpdate):
-    n: int
-
-
-@dataclass
-class ConfigRegister(ConfigUpdate):
-    target: int
-    index: int
-    payload: int
-
-
-class FirmwareUpdate:
-    pass
-
-
-@dataclass
-class FirmwareSetup(FirmwareUpdate):
-    version: int
-    n: int
-
-
-@dataclass
-class FirmwareIncrement(FirmwareUpdate):
+class FirmwareIncrement:
     i: int
 
 
@@ -566,16 +545,15 @@ class RS485(Instrument):
 
     @proxy.exposed
     def dta_program_firmware(self, packets: List[bytes], version,
-                             consumer: Callable[..., None] = None) -> None:
+                             consumer: Callable[[FirmwareIncrement], None] = None) -> None:
         consumer = consumer if callable(consumer) else self.info
 
         self.info(f'programming FW version={version}')
-        consumer(FirmwareSetup(version, len(packets)))
 
         with self.ser.baud(9600):
             for i, chunk in enumerate(packets):
                 self.ser.send(chunk)
-                consumer(FirmwareIncrement(i))
+                consumer(FirmwareIncrement(i + 1))
 
         self.__wait_for_reset()
         self.info(f'programming FW complete')
@@ -612,27 +590,30 @@ class RS485(Instrument):
 
     @proxy.exposed
     def wet_configure(self, config: Dict[Tuple[int, int], int],
-                      consumer: Callable[[ConfigUpdate], None] = None,
+                      consumer: Callable[[ConfigIncrement], None] = None,
                       read_first: bool = True) -> None:
         consumer = consumer if callable(consumer) else self.info
 
         self.info('configuration begun')
 
-        consumer(ConfigSetup(len(config) * 2))
         already_good = set()
+        _registers_done = 0
+
         try:
             for (target, index), payload in config.items():
                 if read_first and self.eeprom_confirm(target, index, payload):
                     already_good.add((target, index))
                 else:
                     self.eeprom_write(target, index, payload)
-                consumer(ConfigRegister(target, index, payload))
+                _registers_done += 1
+                consumer(ConfigIncrement(_registers_done))
 
             for (target, index), payload in config.items():
                 if (target, index) not in already_good:
                     if not self.eeprom_confirm(target, index, payload):
                         raise RS485Error(f'failed to confirm {target} {index} {payload}')
-                consumer(ConfigRegister(target, index, payload))
+                _registers_done += 1
+                consumer(ConfigIncrement(_registers_done))
 
         except (WETNoResponseError, WETBadResponseError) as e:
             raise RS485Error('comm failure in configuration') from e

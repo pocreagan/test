@@ -253,38 +253,37 @@ class TestSteps(Cell):
     """
     show test step progress as it happens
     """
-    step_frames: Dict[str, StepProgress] = dict()
+    step_frames: Dict[int, StepProgress] = dict()
 
     def __post_init__(self):
         pass
 
     @subscribe(StepsInitMessage)
-    def make_steps(self, steps: List[str]) -> None:
+    def make_steps(self, steps: Dict[int, str]) -> None:
         log.info('making steps')
         [widget.pack_forget() for widget in self.step_frames.values()]
         [widget.destroy() for widget in self.step_frames.values()]
         self.step_frames.clear()
-        for i, name in enumerate(steps):
-            self.step_frames[name] = widget = StepProgress(self, name, 66)
+        for i, (k, name) in enumerate(steps.items()):
+            self.step_frames[k] = widget = StepProgress(self, name, 66)
             widget.pack(fill=tk.X, expand=0)
             print(f'packed step -> {name}')
 
     @subscribe(StepStartMessage)
-    def start_progress(self, step: str, minor_text: Optional[str],
-                       max_val: Optional[Union[int, float]]) -> None:
-        self.step_frames[step].start_progress(minor_text, max_val)
+    def start_progress(self, k: int, minor_text: Optional[str], max_val: Optional[Union[int, float]]) -> None:
+        self.step_frames[k].start_progress(minor_text, max_val)
 
     @subscribe(StepMinorTextMessage)
-    def set_minor_text(self, step: str, minor_text: str) -> None:
-        self.step_frames[step].minor_text(minor_text)
+    def set_minor_text(self, k: int, minor_text: str) -> None:
+        self.step_frames[k].minor_text(minor_text)
 
     @subscribe(StepProgressMessage)
-    def set_progress(self, step: str, value: Union[int, float]) -> None:
-        self.step_frames[step].set_progress(value)
+    def set_progress(self, k: int, value: Union[int, float]) -> None:
+        self.step_frames[k].set_progress(value)
 
     @subscribe(StepFinishMessage)
-    def end_progress(self, step: str, success: Optional[bool]) -> None:
-        self.step_frames[step].end_progress(success)
+    def end_progress(self, k: int, success: Optional[bool]) -> None:
+        self.step_frames[k].end_progress(success)
 
     def drag_h(self, action: MouseAction) -> Optional[bool]:
         return self.category.cycle(not action.direction)

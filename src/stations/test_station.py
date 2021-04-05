@@ -10,6 +10,7 @@ from typing import TypeVar
 
 from typing_extensions import Protocol
 
+from model.vc_messages import StepFinishMessage
 from src.base.db.connection import SessionManager
 from src.base.db.connection import SessionType
 from src.base.log.mixin import Logged
@@ -37,7 +38,9 @@ class StepFailure(Failure):
 
 
 class TestFailure(Failure):
-    pass
+    def __init__(self, message, test_step_id: int = None):
+        super().__init__(message)
+        self.test_step_id = test_step_id
 
 
 class StationFailure(Failure):
@@ -64,6 +67,7 @@ class TestStation(instrument.InstrumentHandler, Logged, Generic[_MT, _IT]):
     model: dataclass
     session: SessionType
     config: Dict[str, Any]
+    _test_step_k: int
 
     def __init__(self, session_manager: SessionManager,
                  controller_q: Callable = None, controller_flag=None) -> None:
@@ -84,7 +88,11 @@ class TestStation(instrument.InstrumentHandler, Logged, Generic[_MT, _IT]):
         return msg
 
     def on_test_failure(self, e: Exception) -> None:
+        self.emit(StepFinishMessage(k=self._test_step_k, success=False))
         self.emit(str(e))
+
+    def increment_test_step_k(self) -> None:
+        self._test_step_k += 1
 
     def setup(self, unit: DUTIdentityModel) -> None:
         self.unit = unit
@@ -113,6 +121,7 @@ class TestStation(instrument.InstrumentHandler, Logged, Generic[_MT, _IT]):
     def run(self):
         self.iteration = self.iteration_t()
         self.iteration.dut = self.unit
+        self._test_step_k = 0
         try:
             self.perform_test()
 

@@ -270,23 +270,31 @@ class StepProgress(tk.Frame):
 
         self.progress_bar: ProgressBar = ProgressBar(self, self.parent.w_co)
 
-    def start_progress(self, minor_text: str, max_val: Optional[Union[int, float]]) -> None:
+    def start_progress(self, minor_text: Optional[str], max_val: Optional[Union[int, float]]) -> None:
         self.minor_text(minor_text)
-        if max_val is not None:
-            self.progress_bar.setup(max_val)
         self.label.color(COLORS.white, COLORS.black)
-        self.progress_bar.pack(fill=tk.X, expand=1)
+
+        if max_val is not None:
+            if not self.progress_bar.winfo_ismapped():
+                self.progress_bar.setup(max_val)
+                self.progress_bar.pack(fill=tk.X, expand=1)
 
     def set_progress(self, value: float) -> None:
         self.progress_bar.set(value)
 
-    def minor_text(self, minor_text: str) -> None:
-        self.label.text(f'{self._original_text} - {minor_text}')
+    def minor_text(self, minor_text: Optional[str]) -> None:
+        if minor_text:
+            return self.label.text(f'{self._original_text} - {minor_text}')
+        self.label.text(self._original_text)
 
     def end_progress(self, success: Optional[bool]) -> None:
-        self.progress_bar.pack_forget()
+        if self.progress_bar.winfo_ismapped():
+            self.progress_bar.pack_forget()
+
         if success is None:
             color = COLORS.white
         else:
             color = COLORS.green if success else COLORS.red
+            if success:
+                self.minor_text(None)
         self.label.color(color, COLORS.dark_grey)

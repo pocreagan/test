@@ -6,6 +6,12 @@ from typing import Union
 
 from attrdict import AttrDict
 
+from instruments.wet.rs485 import ConfigRegister
+from instruments.wet.rs485 import FirmwareIncrement
+from model.vc_messages import StepFinishMessage
+from model.vc_messages import StepMinorTextMessage
+from model.vc_messages import StepProgressMessage
+from model.vc_messages import StepStartMessage
 from src.base.general import test_nom_tol
 from src.base.log import logger
 from src.instruments.base.instrument import instruments_joined
@@ -42,6 +48,11 @@ log = logger(__name__)
 __all__ = [
     'Station3',
 ]
+
+_light_test_step_name = 'STRING'
+_config_test_step_name = 'CONFIG'
+_firmware_test_step_name = 'FIRMWARE'
+_unit_identity_test_step_name = 'EEPROM'
 
 
 class Station3(TestStation):
@@ -94,12 +105,18 @@ class Station3(TestStation):
         )
 
         light_measurements: List[LightingStation3LightMeasurement] = []
+        _duration = params.duration
+        _test_step_k = self._test_step_k
+
+        self.emit(StepStartMessage(k=_test_step_k, minor_text=params.name, max_val=_duration))
+
         _emit = self.emit
+        _step_name = _light_test_step_name
 
         def consumer(sample: ThermalDropSample) -> None:
             model = LightingStation3LightMeasurement(pct_drop=sample.pct_drop, te=sample.te)
-            light_measurements.append(model)
-            _emit(model)
+            light_measurements.append(_emit(model))
+            _emit(StepProgressMessage(k=_test_step_k, value=min(_duration, sample.te)))
 
         try:
             # noinspection PyUnresolvedReferences
@@ -108,7 +125,7 @@ class Station3(TestStation):
             ).resolve()  # type: LightMeasurement, LightMeasurement
 
         except LightMeterError as e:
-            raise TestFailure(str(e))
+            raise TestFailure(str(e), _test_step_k)
 
         dc_setting_promise.resolve()
         # noinspection PyUnresolvedReferences
@@ -133,50 +150,74 @@ class Station3(TestStation):
             pct_drop_pf=percent_drop <= params.pct_drop_max, t=datetime.now(),
         )
         obj.pf = obj.cie_pf and obj.fcd_pf and obj.p_pf and obj.pct_drop_pf
+
+        self.emit(StepFinishMessage(k=_test_step_k, success=obj.pf))
+
         return self.emit(obj)
 
     @instruments_joined
     def configure(self, config: Configuration, wait_after: bool) -> EEPROMConfigIteration:
         config_model = self.iteration.add(EEPROMConfigIteration(config_id=config.config_id))
+        _emit = self.emit
+        _test_step_k = self._test_step_k
+        _num_registers = len(config.registers)
+
+        self.emit(StepStartMessage(k=_test_step_k, minor_text='write', max_val=_num_registers * 2))
+
+        def consumer(message: ConfigRegister) -> None:
+            if message.i == _num_registers:
+                _emit(StepMinorTextMessage(k=_test_step_k, minor_text='confirm'))
+            _emit(StepProgressMessage(k=_test_step_k, value=message.i))
+
         try:
-            self.ftdi.wet_configure(config.registers, self.emit, read_first=False)
+            self.ftdi.wet_configure(config.registers, consumer, read_first=False)
 
         except RS485Error:
-            raise TestFailure(f'{config.name} configuration failed (initial={config.is_initial})')
+            raise TestFailure(
+                f'{config.name} configuration failed (initial={config.is_initial})', _test_step_k
+            )
 
         else:
             self.ftdi.wet_send_reset(wait_after=wait_after)
             config_model.success = True
+            self.emit(StepFinishMessage(k=_test_step_k, success=True))
 
         return config_model
 
     @instruments_joined
     def unit_identity(self, unit: LightingDUT, do_write: bool) -> ConfirmUnitIdentityIteration:
         unit_identity_confirmation_model = self.iteration.add(ConfirmUnitIdentityIteration())
+        _test_step_k = self._test_step_k
+
+        self.emit(StepStartMessage(k=_test_step_k))
+
         try:
             if do_write:
+                self.emit(StepMinorTextMessage(k=_test_step_k, minor_text='write'))
+
                 self.ftdi.wet_write_unit_identity(unit.sn, unit.mn)
 
+            self.emit(StepMinorTextMessage(k=_test_step_k, minor_text='confirm'))
+
             if not self.ftdi.wet_confirm_unit_identity(unit.sn, unit.mn):
-                raise TestFailure('failed to confirm unit identity: unit identity incorrect')
+                raise TestFailure('failed to confirm unit identity: unit identity incorrect', _test_step_k)
 
         except WETCommandError:
-            raise TestFailure('failed to confirm unit identity: comm failure')
+            raise TestFailure('failed to confirm unit identity: comm failure', _test_step_k)
 
         else:
             unit_identity_confirmation_model.success = True
+            self.emit(StepFinishMessage(k=_test_step_k, success=True))
 
         return unit_identity_confirmation_model
 
     @instruments_joined
     def perform_cooldown_check(self) -> None:
         with self.session_manager() as session:
-            ready_to_test = LightingStation3Iteration.is_cooldown_done(
-                session, self.unit, self.model.cooldown_interval_s
-            )
-        print(ready_to_test)
-        if not ready_to_test:
-            raise TestFailure('cooldown period has not elapsed')
+            if not LightingStation3Iteration.is_cooldown_done(
+                    session, self.unit, self.model.cooldown_interval_s
+            ):
+                raise TestFailure('cooldown period has not elapsed')
 
     @instruments_joined
     def perform_connection_check(self) -> None:
@@ -202,17 +243,32 @@ class Station3(TestStation):
             firmware_iteration_model = self.iteration.add(FirmwareIteration(
                 firmware_id=self.model.firmware_object.version_id,
             ))
+            _test_step_k = self._test_step_k
+
+            self.emit(StepStartMessage(k=_test_step_k))
 
             if self.model.firmware_force_overwrite or not self.ftdi.dta_is_programmed_correctly(
                     self.model.firmware_object.version
             ).resolve():
+
+                self.emit(StepMinorTextMessage(k=_test_step_k, minor_text='erase'))
+
                 if not self.ftdi.dta_erase_and_confirm().resolve():
-                    raise TestFailure('failed to confirm FW erasure')
+                    raise TestFailure('failed to confirm FW erasure', _test_step_k)
+
+                self.emit(StepStartMessage(
+                    k=_test_step_k, minor_text='write', max_val=len(self.model.firmware_object.code)
+                ))
+                _emit = self.emit
+
+                def consumer(message: FirmwareIncrement) -> None:
+                    _emit(StepProgressMessage(k=_test_step_k, value=message.i))
 
                 # noinspection PyNoneFunctionAssignment
                 programming_promise = self.ftdi.dta_program_firmware(
-                    self.model.firmware_object.code, self.model.firmware_object.version, self.emit
+                    self.model.firmware_object.code, self.model.firmware_object.version, consumer
                 )
+
                 if self.model.program_with_thermal:
                     thermal_row, *remaining_rows = remaining_rows
                     self.iteration.result_rows.append(self.string_test(thermal_row, False))
@@ -220,12 +276,10 @@ class Station3(TestStation):
                 # noinspection PyUnresolvedReferences
                 programming_promise.resolve()
                 if not self.ftdi.dta_is_programmed_correctly(self.model.firmware_object.version).resolve():
-                    raise TestFailure('failed to confirm FW version after programming')
+                    raise TestFailure('failed to confirm FW version after programming', _test_step_k)
 
-                firmware_iteration_model.success = True
-
-            else:
-                firmware_iteration_model.skipped = True
+            firmware_iteration_model.skipped = True
+            self.emit(StepFinishMessage(k=_test_step_k, success=True))
 
         if self.model.initial_config is not None:
             self.configure(self.model.initial_config_object, True)
