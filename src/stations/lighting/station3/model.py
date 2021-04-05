@@ -5,6 +5,7 @@ from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
+from typing import Tuple
 from typing import Type
 
 from src.base.db.connection import SessionManager
@@ -94,9 +95,13 @@ class Station3ModelBuilder:
                 self.built_model = self.build_test_model(session)
         return self.built_model
 
-    def for_dut(self, dut: LightingDUT) -> Station3Model:
+    def for_dut(self, dut: LightingDUT) -> Tuple[Station3Model, Station3ChartParamsModel]:
         self()
-        return self.built_model[dut.mn][dut.option]
+        model = self.built_model[dut.mn][dut.option]
+        chart = Station3ChartParamsModel(
+            param_id=model.params_obj.id, mn=dut.mn, rows=model.string_params_rows
+        )
+        return model, chart
 
     def build_test_model(self, session: SessionType) -> Dict[int, Dict[Optional[str], Station3Model]]:
         model_dict = {}

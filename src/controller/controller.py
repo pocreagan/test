@@ -7,8 +7,7 @@ from random import choice
 from random import randint
 from typing import *
 
-from typing_extensions import Literal
-
+from src.controller.base.enums import SubscribeTo
 from src.model.db.schema import LightingStation3ResultRow
 from src.base import atexit_proxy
 from src.base.concurrency.concurrency import *
@@ -20,18 +19,18 @@ from src.model.db.schema import LightingDUT
 from src.model.db.schema import LightingStation3Iteration
 from src.model.resources import APP
 from src.model.vc_messages import *
+from src.stations.lighting.station3.test import Station3
 
 __all__ = [
     'Controller',
 ]
 
-# TODO: add thread wrapping to TestStation
-# TODO: make test steps start, result, update messages
 # TODO: TE check message
 # TODO: chart updates and FA methods/messages
 # TODO: make label program for new DUT scans
 # TODO: main CLI or system name -> test station package cfg map
 # TODO: sqlite -> postgres
+
 
 log = logger(__name__)
 
@@ -51,11 +50,13 @@ def _make_one_fake_entry(fresh: bool = False) -> HistoryAddEntryMessage:
 
 class Controller(Process):
     scan_methods: List[Tuple[str, re.Pattern]]
-    subscribed_methods: DefaultDict[Union[Literal['parent'], Literal['child']], Dict[Type, str]]
+    subscribed_methods: DefaultDict[SubscribeTo, Dict[Type, str]]
     iteration_t: Type
     _station_mode: StationMode
     _iteration_cla: Type[LightingStation3Iteration] = LightingStation3Iteration
     _dut_cla: Type[LightingDUT] = LightingDUT
+    _test_station_t = Station3
+    test_station: Station3
 
     _poll_delay_s = APP.G['POLLING_INTERVAL_MS'] / 1000
 
@@ -111,6 +112,26 @@ class Controller(Process):
     def te_check(self) -> None:
         pass
 
+    @subscribe(ViewInitDataMessage)
+    def init_data(self) -> None:
+        self.give_metrics()
+        self.get_history()
+        with self.session_manager(expire=False) as session:
+            iteration: LightingStation3Iteration = session.query(LightingStation3Iteration).first()
+            _ = [f.firmware for f in iteration.firmware_iterations]
+            _ = [c.config for c in iteration.config_iterations]
+            _ = iteration.unit_identity_confirmations
+            _ = [r.param_row for r in iteration.result_rows]
+            dut: LightingDUT = iteration.dut
+            messages = [dut]
+            for measurement in iteration.result_rows:  # type: LightingStation3ResultRow
+                messages.extend([*measurement.light_measurements, measurement])
+            messages.append(iteration)
+            # self.messages_iter = iter(messages)
+            self.messages_iter = iter([])
+            self._next_chart_message = time.time() + .05
+        self.test_station.setup(dut)
+
     @subscribe(GetMetricsMessage)
     def give_metrics(self) -> None:
         # response = MetricsMessage(0, 0, 0, 0)
@@ -143,30 +164,13 @@ class Controller(Process):
         _ = self
         return True
 
-    def send_steps(self):
-        log.info('publishing steps init message')
-        self.publish(StepsInitMessage(['AUTODETECT',
-                                       'FIRMWARE',
-                                       'RAW CONFIGURATION',
-                                       'THERMAL TEST',
-                                       'STRING TEST']))
-
     def add_one_to_history(self) -> None:
         self.publish(_make_one_fake_entry(True))
 
     def poll(self) -> None:
         Process.poll(self)
-        if time.time() > self._next_chart_message:
-            try:
-                self.publish(next(self.messages_iter))
-            except StopIteration:
-                pass
-            self._next_chart_message = time.time() + .05
 
-    def handle_message(self, message) -> None:
-        return self._handle_message(message, 'parent')
-
-    def _handle_message(self, message, k: Union[Literal['child'], Literal['parent']]) -> None:
+    def _handle_message(self, message, k: SubscribeTo) -> None:
         method_name = self.subscribed_methods[k].get(type(message), None)
         if method_name is not None:
             method = getattr(self, method_name, None)
@@ -175,40 +179,29 @@ class Controller(Process):
                 return method(**args)
         log.warning(f'{message} from {k} unhandled')
 
-    def handle_child_message(self, message):
-        return self._handle_message(message, 'child')
+    def handle_message(self, message) -> None:
+        return self._handle_message(message, SubscribeTo.VIEW)
+
+    def handle_station_message(self, message):
+        return self._handle_message(message, SubscribeTo.STATION)
 
     def publish(self, message) -> None:
         log.info(f'sending {message}')
         self._q.put(message)
 
     def __post_init__(self):
+        Process.__post_init__(self)
+
         self.is_testing = False
         self._station_mode = StationMode.TESTING
-
         self.session_manager = connect()
         self.test_station_q = Queue()
 
-        with self.session_manager(expire=False) as session:
-            iteration: LightingStation3Iteration = session.query(LightingStation3Iteration).first()
-            _ = [f.firmware for f in iteration.firmware_iterations]
-            _ = [c.config for c in iteration.config_iterations]
-            _ = iteration.unit_identity_confirmations
-            _ = [r.param_row for r in iteration.result_rows]
-            dut: LightingDUT = iteration.dut
-            messages = [dut]
-            for measurement in iteration.result_rows:  # type: LightingStation3ResultRow
-                messages.extend([*measurement.light_measurements, measurement])
-            messages.append(iteration)
-            # self.messages_iter = iter(messages)
-            self.messages_iter = iter([])
-            self._next_chart_message = time.time() + .05
-
-        self.send_steps()
-        self.get_history()
+        self.test_station = self._test_station_t(self.session_manager, view_q=self.publish)
+        # self.test_station.instruments_setup()
 
         logger.to_main_process(self._log_q).start()
-        Process.__post_init__(self)
+
 
     def on_shutdown(self):
         atexit_proxy.perform(self.log)

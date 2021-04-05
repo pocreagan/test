@@ -338,11 +338,11 @@ class MessageHandler:
         loops until controller sends stop message
         sends stopped message when it ends
         """
-        self.log.info('STARTING...')
-        self.__post_init__()
-        self.log.info('STARTED')
 
         try:
+            self.log.info('STARTING...')
+            self.__post_init__()
+            self.log.info('STARTED')
             self.mainloop()
 
         except SentinelReceived:

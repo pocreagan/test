@@ -1,21 +1,19 @@
 import queue
 from collections import defaultdict
 from dataclasses import asdict
-from dataclasses import dataclass
 from typing import DefaultDict
-from typing import Dict
 from typing import Optional
 from typing import Set
 from typing import Tuple
 from typing import Type
 from typing import Union
 
-from src.base import register
 from src.base.concurrency.concurrency import *
 from src.base.log import logger
 from src.base.log.objects import Handler
 from src.model.db import connect
 from src.model.resources import APP
+from src.model.vc_messages import ViewInitDataMessage
 from src.view.base.window import Window
 
 __all__ = [
@@ -38,10 +36,9 @@ class View(Window):  # type: ignore
 
         Window.__init__(self)
 
-    @register.after('__init__')
-    def _add_subscribed_methods_to_parent(self):
-        for _t, method_name in self.subscribed_methods.items():
-            self.parent.subscribed_methods[_t].add(method_name)
+    def start_polling(self) -> None:
+        Window.start_polling(self)
+        self.publish(ViewInitDataMessage())
 
     def close(self) -> None:
         self._q.put_sentinel()

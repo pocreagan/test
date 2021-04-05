@@ -4,7 +4,9 @@ from functools import partial
 from operator import attrgetter
 from tkinter import font
 from typing import *
+import matplotlib.pyplot as plt
 
+from model.db.schema import LightingStation3ParamRow
 from src.base.general import truncate
 from src.base.log import logger
 from src.model.db import connect
@@ -294,21 +296,24 @@ class Chart(Cell):
     show current or historical test data
     """
     _bg = COLORS.black
+    _chart: tk.Canvas
+    _plot: Root
 
     def __post_init__(self):
-        _plot_cla: Type[Root] = getattr(dynamic_import('chart', *APP.STATION.import_path), 'Plot')
+        self._plot_cla: Type[Root] = getattr(dynamic_import('chart', *APP.STATION.import_path), 'Plot')
+        self.last_param_id = 0
 
-        with connect(echo_sql=False)(expire=False) as session:
-            param = LightingStation3Param.get(session, '918 brighter')
-            iteration: LightingStation3Iteration = session.query(LightingStation3Iteration).first()
-            dut: LightingDUT = iteration.dut
-
-            params = Station3ChartParamsModel(
-                param_id=param.id, mn=dut.mn, rows=list(sorted(param.rows, key=attrgetter('row_num')))
-            )
-
-        self._plot = _plot_cla(params, w=self.w_co, h=self.h_co,
-                               dpi=self.parent.screen.dpi, color=self._bg)
+        # with connect(echo_sql=False)(expire=False) as session:
+        #     param = LightingStation3Param.get(session, '918 brighter')
+        #     iteration: LightingStation3Iteration = session.query(LightingStation3Iteration).first()
+        #     dut: LightingDUT = iteration.dut
+        #
+        #     params = Station3ChartParamsModel(
+        #         param_id=param.id, mn=dut.mn, rows=list(sorted(param.rows, key=attrgetter('row_num')))
+        #     )
+        #
+        # self._plot = self._plot_cla(params, w=self.w_co, h=self.h_co,
+        #                        dpi=self.parent.screen.dpi, color=self._bg)
 
     def _before_show(self) -> None:
         pass
@@ -317,6 +322,34 @@ class Chart(Cell):
         pass
 
     def _on_show(self) -> None:
+        # self._plot.set_background()
+        # self._chart = self._plot.for_tk(self)
+        # self._chart.update()
+        # self._plot.init()
+        # self._chart.update()
+        # self.update()
+        pass
+
+    def kill_chart(self) -> None:
+        """
+        kill plt and plt.fig to prevent tk backend bs on close
+        """
+        try:
+            self._chart.destroy()
+            plt.close(self._plot.fig)
+
+        except AttributeError:
+            pass
+
+        plt.clf()
+
+    @subscribe(Station3ChartParamsModel)
+    def init_chart(self, **kwargs) -> None:
+        params = Station3ChartParamsModel(**kwargs)
+        if params.param_id != self.last_param_id:
+            self.kill_chart()
+            self._plot = self._plot_cla(params, w=self.w_co, h=self.h_co,
+                                   dpi=self.parent.screen.dpi, color=self._bg)
         self._plot.set_background()
         self._chart = self._plot.for_tk(self)
         self._chart.update()
@@ -337,19 +370,7 @@ class Chart(Cell):
         self._chart.update()
 
     def _before_destroy(self):
-        """
-        kill plt and plt.fig to prevent tk backend bs on close
-        """
-        import matplotlib.pyplot as plt
-
-        try:
-            self._chart.destroy()
-            plt.close(self._plot.fig)
-
-        except AttributeError:
-            pass
-
-        plt.clf()
+        self.kill_chart()
 
 
 WIDGET = Union[

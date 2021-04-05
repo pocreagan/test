@@ -4,6 +4,8 @@ application-wide repo
 # ? REQUIRE <C:\Projects\test\resources\cfg>
 # ? REQUIRE <C:\Projects\test\resources\font>
 # ? REQUIRE <C:\Projects\test\resources\img>
+# ? REQUIRE <C:\Projects\test\resources\bin>
+# TODO: light meter can't find dll in binary
 
 import re
 import subprocess

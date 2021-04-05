@@ -20,8 +20,9 @@ from typing import Iterable
 from typing import List
 from typing import Tuple
 
-from model import configuration
-from base.concurrency import proxy
+from src.model import configuration
+from src.base.concurrency import proxy
+from src.model.resources import RESOURCE
 from src.instruments.base.dll import DLLFunc
 from src.instruments.base.dll import load_dll
 from src.instruments.base.instrument import Instrument
@@ -113,7 +114,7 @@ class LightMeter(Instrument):
 
     def __init__(self) -> None:
         try:
-            self._dll = load_dll(Path(self._DLL_FP))
+            self._dll = load_dll(RESOURCE(self._DLL_FP))
         except OSError as e:
             raise LightMeterError(f'failed to load DLL at {self._DLL_FP}') from e
 

@@ -10,6 +10,7 @@ from typing import TypeVar
 
 from typing_extensions import Protocol
 
+from src.model.vc_messages import StepsInitMessage
 from src.base.concurrency import proxy
 from src.base.db.connection import SessionManager
 from src.base.db.connection import SessionType
@@ -81,7 +82,7 @@ class TestStation(instrument.InstrumentHandler, Generic[_MT, _IT]):
 
     def emit(self, msg: _T) -> _T:
         """
-        send test updates to view, for example
+        send test updates to view
         """
         self._emit(msg)
         return msg
@@ -94,23 +95,30 @@ class TestStation(instrument.InstrumentHandler, Generic[_MT, _IT]):
             ))
         self.emit(e)
 
-    def setup(self, unit: DUTIdentityModelProtocol) -> None:
-        self.unit = unit
-        self.model = self.model_builder.for_dut(self.unit)
-
-        self.emit(self.unit)
-        self.emit(self.model.step_ids.for_view)
+    def on_unhandled_exception(self, e: Exception) -> None:
+        raise StationFailure(str(e)) from e
 
     @proxy.exposed
-    def connection_check(self) -> None:
+    def setup(self, unit: DUTIdentityModelProtocol) -> None:
+        self.unit = unit
+        self.model, for_chart = self.model_builder.for_dut(self.unit)
+        self.emit(for_chart)
+        self.emit(self.unit)
+        self.emit(StepsInitMessage(self.model.step_ids.for_view))
+
+    @proxy.exposed
+    def connection_check(self) -> bool:
         try:
             self.perform_connection_check()
 
         except TestFailure as e:
             self.on_test_failure(e)
+            return False
 
         except Exception as e:
-            raise StationFailure(str(e)) from e
+            self.on_unhandled_exception(e)
+
+        return True
 
     @proxy.exposed
     def run(self):
@@ -124,12 +132,10 @@ class TestStation(instrument.InstrumentHandler, Generic[_MT, _IT]):
             self.connection_check()
 
         except Exception as e:
-            raise StationFailure(str(e)) from e
+            self.on_unhandled_exception(e)
 
-        with self.session_manager() as session:
-            session.add(self.iteration)
-
-        return self.iteration
+        with self.session_manager(expire=False) as session:
+            return session.make(self.iteration)
 
     def perform_connection_check(self) -> None:
         """

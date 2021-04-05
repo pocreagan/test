@@ -25,6 +25,7 @@ __all__ = [
     'StepFinishMessage',
     'GetMetricsMessage',
     'MetricsMessage',
+    'ViewInitDataMessage',
 ]
 
 
@@ -50,6 +51,11 @@ class TECheckMessage:
 
 @dataclass
 class GetMetricsMessage:
+    pass
+
+
+@dataclass
+class ViewInitDataMessage:
     pass
 
 
