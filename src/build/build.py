@@ -20,7 +20,7 @@ class Testing(BuildSpecification):
     DO_CLEAN: bool = True
     ENCRYPT_BYTECODE: bool = False
     UPX_COMPRESS: bool = False
-    ONE_FILE: bool = True
+    ONE_FILE: bool = False
     ASK_PERMISSION: bool = False
     # noinspection SpellCheckingInspection
     UPX_EXCLUDE = ['vcruntime140.dll']

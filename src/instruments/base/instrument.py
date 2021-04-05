@@ -50,13 +50,12 @@ class Instrument(Logged, proxy.Mixin, register.Mixin):
 
     _next_tx: float = 0.
 
-    def instrument_add_to_handler(self, handler: 'InstrumentHandler', name: str):
-        setdefault_attr_from_factory(handler, _test_instruments_key, dict)[name] = self
-        return self
-
-    def __set_name__(self, owner, name: str) -> None:
-        self.instrument_add_to_handler(owner, name)
+    def __set_name__(self, owner: 'InstrumentHandler', name: str) -> None:
+        setdefault_attr_from_factory(owner, _test_instruments_key, dict)[name] = self
         setattr(owner, name, self)
+
+    def __get__(self, instance, owner):
+        return self
 
     def set_next_tx_time(self) -> None:
         self._next_tx = time() + self.TX_WAIT_S
@@ -65,18 +64,24 @@ class Instrument(Logged, proxy.Mixin, register.Mixin):
     def _instrument_set_constants_(self) -> None:
         update_configs_on_object(self)
         self._should_be_open = False
+        self._instrument_check_flags = []
         self.name = type(self).__qualname__
 
+    def instrument_check_flags(self) -> None:
+        for flag in self._instrument_check_flags:
+            if flag.is_set():
+                raise CancelledError()
+
     def _instrument_delay(self, te: float) -> None:
-        self.proxy_check_cancelled()
         if te > 0.:
             tf = time() + te
             for _ in count():
                 self.proxy_check_cancelled()
+                self.instrument_check_flags()
                 t = time()
                 if t > tf:
                     break
-                sleep(min(.001, tf - t))
+                sleep(max(0., min(.001, tf - t)))
 
     def _instrument_setup(self) -> None:
         """

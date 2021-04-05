@@ -35,7 +35,7 @@ class UnitInfo(Region):
 
     def _set_background(self) -> None:
         self.ax.imshow(
-            Image.open(RESOURCE.img(f'mn{self.properties["mn"]}.png')),
+            Image.open(RESOURCE.img(f'mn{self.params.mn}.png')),
             origin='upper', extent=unit_extent, alpha=0.5, zorder=-1
         )
 

@@ -7,6 +7,7 @@ from typing import List
 from typing import Optional
 from typing import Type
 
+from src.model.db.schema import LightingStation3ParamRow
 from src.model.db.schema import AppConfigUpdate
 from src.base.db.connection import SessionManager
 from src.base.db.connection import SessionType
@@ -23,8 +24,16 @@ from src.model.db.schema import YamlFile
 
 __all__ = [
     'Station3ModelBuilder',
-    'Station3Model'
+    'Station3Model',
+    'Station3ChartParamsModel',
 ]
+
+
+@dataclass
+class Station3ChartParamsModel:
+    param_id: int
+    mn: int
+    rows: List[LightingStation3ParamRow]
 
 
 @dataclass
@@ -45,7 +54,7 @@ class Station3Model:
     final_config_object: Optional[Configuration] = None
     firmware_object: Optional[Firmware] = None
     params_obj: Optional[LightingStation3Param] = None
-    string_params_rows: List[LightingStation3Param] = field(default_factory=list)
+    string_params_rows: List[LightingStation3ParamRow] = field(default_factory=list)
 
 
 class Station3ModelBuilder:

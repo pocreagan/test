@@ -16,6 +16,7 @@ from typing import Callable
 from typing import Deque
 from typing import Dict
 from typing import Generator
+from typing import List
 from typing import Optional
 from typing import Tuple
 from typing import TypeVar
@@ -529,6 +530,7 @@ _CALLABLE_T = TypeVar('_CALLABLE_T', bound=Callable)
 
 class Mixin(_SyncMixin):
     __make_proxy_cache_key = '_proxy_type_cache'
+    _proxy_flags: List[Event] = None
 
     # this is produced on proxy spawn and consumed in exposed.__get__
     resource: Optional['_ProxyServer']
@@ -608,21 +610,12 @@ class Mixin(_SyncMixin):
         [delattr(self, attr) for attr in ('proxy_resource', 'proxy_cancel_flag', 'proxy_q')]
         return resource
 
-    def proxy_check_cancelled(self, *flags: Event) -> None:
+    def proxy_check_cancelled(self) -> None:
         """
         should be used in long-running tasks
-        additional flags should be provided with an error_to_raise attr
-        cancellation reason can then be introspected in calling process on __cause__
         """
-
         if hasattr(self, 'proxy_cancel_flag') and self.proxy_cancel_flag.is_set():
             raise CancelledError()
-        for flag in flags:
-            if flag.is_set():
-                flag_error = getattr(flag, 'error_to_raise', None)
-                if flag_error is None:
-                    raise CancelledError()
-                raise CancelledError() from flag_error
 
     def proxy_spawn_guard(self) -> str:
         """

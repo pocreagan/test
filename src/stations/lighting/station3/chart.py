@@ -28,6 +28,7 @@ from src.view.chart.concrete_widgets import ConfigData
 from src.view.chart.concrete_widgets import TestStatus
 from src.view.chart.concrete_widgets import UnitInfo
 from src.view.chart.debug_window import ChartDebugWindow
+from src.stations.lighting.station3.model import Station3ChartParamsModel
 
 
 __all__ = [
@@ -88,7 +89,7 @@ def _make_string_color(param_row: LightingStation3ParamRow) -> str:
 
 
 class CIE(Region):
-    params: List[LightingStation3ParamRow]
+    params: Station3ChartParamsModel
     current_param: LightingStation3ParamRow
 
     OFF_SCREEN = -1, -1
@@ -97,9 +98,7 @@ class CIE(Region):
         pass
 
     def __post_init__(self) -> None:
-        [self.artists.__setitem__(
-            param_row.id, dict()
-        ) for param_row in self.params]
+        pass
 
     def _set_background(self) -> None:
         self.ax.imshow(
@@ -110,7 +109,7 @@ class CIE(Region):
             Circle(
                 (x + CIE_X_OFFSET, y + CIE_Y_OFFSET), r, linewidth=0.5
             ) for x, y, r in zip(*[[
-                getattr(param_row, k) for param_row in self.params
+                getattr(param_row, k) for param_row in self.params.rows
             ] for k in ['x_nom', 'y_nom', 'color_dist_max']
             ])
         ]
@@ -120,6 +119,9 @@ class CIE(Region):
         )))
 
     def _init_results(self) -> None:
+        [self.artists.__setitem__(
+            param_row.id, dict()
+        ) for param_row in self.params.rows]
         self.artists['cie'] = {param_row.id: self.var(self.ax.add_patch(
             Circle(
                 self.OFF_SCREEN,
@@ -127,7 +129,7 @@ class CIE(Region):
                 facecolor=_make_string_color(param_row)[0],
                 fill=True, linewidth=1, zorder=12,
             )
-        )) for param_row in self.params}
+        )) for param_row in self.params.rows}
 
     def start_string(self, param_row: LightingStation3ParamRow) -> None:
         self.current_param = param_row
@@ -143,7 +145,7 @@ class CIE(Region):
 
 
 class Thermal(Region):
-    params: List[LightingStation3ParamRow]
+    params: Station3ChartParamsModel
     current_param: LightingStation3ParamRow
 
     l1 = [(THERM_XI, THERM_YF), (THERM_XF, THERM_YF)]
@@ -172,7 +174,7 @@ class Thermal(Region):
             color=_make_string_color(param_row)[0],
             linewidth=THERMAL_CHART_LINE_W_PX,
             alpha=THERMAL_CHART_LINE_ALPHA
-        )[0]) for param_row in self.params}
+        )[0]) for param_row in self.params.rows}
 
     def start_string(self, param_row: LightingStation3ParamRow) -> None:
         self.current_param = param_row
@@ -209,7 +211,7 @@ class Thermal(Region):
 
 
 class BarChart(Region):
-    params: List[LightingStation3ParamRow]
+    params: Station3ChartParamsModel
     current_param: LightingStation3ParamRow
 
     RIGHT_TOP = (1, 0)
@@ -242,7 +244,7 @@ class BarChart(Region):
         helper.make_bounds(self.ax, ['r', 'r'], [l1, l2])
 
     def _init_results(self) -> None:
-        num_channels = len(self.params) + 1
+        num_channels = len(self.params.rows) + 1
         y_max, pad_out = self._scale(num_channels)
 
         self.artists['bar'] = {
@@ -257,14 +259,14 @@ class BarChart(Region):
                 align='center',
                 color=['b', 'b'] + list(
                     chain(*[
-                        [_make_string_color(param_row)[0]] * 2 for param_row in self.params
+                        [_make_string_color(param_row)[0]] * 2 for param_row in self.params.rows
                     ])
                 ),
                 alpha=THERMAL_CHART_LINE_ALPHA,
             )), 'indices': {param_row.id: {
                 'fcd': (2 * (i + 1)),
                 'p': (2 * (i + 1)) + 1
-            } for i, param_row in enumerate(self.params)}
+            } for i, param_row in enumerate(self.params.rows)}
         }
 
     def start_string(self, param_row: LightingStation3ParamRow) -> None:
@@ -283,7 +285,7 @@ class BarChart(Region):
 
 class WhiteCalculations(RoundedTextMultiLine):
     params: List[LightingStation3ParamRow]
-    current_param: LightingStation3ParamRow
+    params: Station3ChartParamsModel
 
     scaling_factor_y = 0.3
     names = ['cct', 'duv']
@@ -329,7 +331,7 @@ class WhiteCalculations(RoundedTextMultiLine):
 
 
 class ChannelInfo(RoundedTextMultiLine):
-    params: List[LightingStation3ParamRow]
+    params: Station3ChartParamsModel
     current_param: LightingStation3ParamRow
     scaling_factor_y = 0.55
     names = ['dist', 'fcd', 'P', 'drop']
@@ -399,7 +401,7 @@ class ChannelInfo(RoundedTextMultiLine):
 
 
 class BigChart(Region):
-    params: List[LightingStation3ParamRow]
+    params: Station3ChartParamsModel
 
     def _set_background(self) -> None:
         pass
@@ -430,8 +432,10 @@ CALC_RESULT = Tuple[float, bool]
 
 
 class Plot(Root):
-    params: List[LightingStation3ParamRow]
+    params: Station3ChartParamsModel
     current_param: LightingStation3ParamRow
+    set_params: Callable[[Station3ChartParamsModel], None]
+
     white_quality: WhiteCalculations = None
     param_row_index: int = 0
 
@@ -444,7 +448,7 @@ class Plot(Root):
         self.param_row_index += 1
         try:
             self.set_attr_propagate(
-                'current_param', self.params[self.param_row_index]
+                'current_param', self.params.rows[self.param_row_index]
             )
         except IndexError:
             pass
@@ -464,10 +468,10 @@ class Plot(Root):
         self.artists['channels'] = {}
         top_offset, _bottom, self.channel_info = 5, None, dict()
 
-        for i, param in enumerate(self.params):
+        for i, row in enumerate(self.params.rows):
             _top = top_offset + (i * 16)
-            _bottom, widget = self._add_info_box(_top, ChannelInfo, param)
-            self.channel_info[param.id]: ChannelInfo = widget
+            _bottom, widget = self._add_info_box(_top, ChannelInfo, row)
+            self.channel_info[row.id]: ChannelInfo = widget
 
     @singledispatchmethod
     def update(self, msg):
@@ -511,12 +515,17 @@ class Plot(Root):
 if __name__ == '__main__':
     with logger:
         with connect(echo_sql=False)(expire=False) as session:
-            params = LightingStation3Param.get(session, '918 brighter')
-            rows = list(sorted(params.rows, key=attrgetter('row_num')))
+            param = LightingStation3Param.get(session, '918 brighter')
             iteration: LightingStation3Iteration = session.query(LightingStation3Iteration).first()
             dut: LightingDUT = iteration.dut
+
+            params = Station3ChartParamsModel(
+                param_id=param.id, mn=dut.mn, rows=list(sorted(param.rows, key=attrgetter('row_num')))
+            )
+
             messages = [dut]
             for measurement in iteration.result_rows:  # type: LightingStation3ResultRow
                 messages.extend([*measurement.light_measurements, measurement])
             messages.append(iteration)
-            window = ChartDebugWindow(Plot(rows, mn=dut.mn), messages).mainloop()
+
+            window = ChartDebugWindow(Plot(params), messages).mainloop()

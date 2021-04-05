@@ -1,10 +1,13 @@
 import datetime
 import re
+from dataclasses import dataclass
+from dataclasses import fields
 from random import choice
 from random import randint
 from typing import *
 
-from controller.base.decorators import subscribe
+from model.db import connect
+from src.base import atexit_proxy
 from src.base.concurrency.concurrency import *
 from src.base.concurrency.message import ControllerAction
 from src.base.concurrency.message import Message
@@ -12,6 +15,8 @@ from src.base.concurrency.message import ViewAction
 from src.base.general import random_condition
 from src.base.log import logger
 from src.controller.base.decorators import scan_method
+from src.controller.base.decorators import subscribe
+from src.controller.messages import *
 from src.model.resources import APP
 
 __all__ = [
@@ -80,81 +85,21 @@ class CellCounterpart(ChildTerminus):
         """
 
 
-class History(CellCounterpart):
-    def __post_init__(self) -> None:
-        self.sns = [str(randint(2 ** 23, 2 ** 24 - 1)).zfill(8) for _ in range(5)]
-
-    def _make_one(self, fresh: bool = False) -> TEST_RUN_D_T:
-        dt = datetime.datetime.now()
-        if not fresh:
-            # dt -= datetime.timedelta(hours=randint(0, 8), minutes=randint(0, 59), seconds=randint(0, 59))
-            dt -= datetime.timedelta(minutes=randint(0, 59), seconds=randint(0, 59))
-        return dict(
-            id=randint(100, 100000000),
-            pf=bool(randint(0, 1)),
-            dt=dt,
-            mn='10-00938' if randint(0, 1) else '10-00962',
-            sn=choice(self.sns),
-        )
-
-    def all(self) -> None:
-        data = [self._make_one() for _ in range(randint(20, 40))]
-        data.sort(key=lambda r: r['dt'])
-        self.perform_view_action(self, 'initialize_history', data)
-
-    def new(self) -> None:
-        self.perform_view_action(self, 'add_one_to_history', self._make_one(True))
+_sns = [str(randint(2 ** 23, 2 ** 24 - 1)).zfill(8) for _ in range(5)]
 
 
-class Instruments(ThreadHandler, CellCounterpart):
-    thread_classes: Dict[str, Any]
-
-    def __post_init__(self, instruments: List[str]) -> None:
-        from src import instruments as instruments_module
-
-        self._instruments_list = instruments
-        self._te_ready_dict = BoolDict.fromkeys(self._instruments_list, None)
-        self.closed = self._te_ready_dict.all_none
-        self.ready = self._te_ready_dict.all_true
-
-        self.thread_classes = {k: getattr(instruments_module, k) for k in self._instruments_list}
-
-        ThreadHandler.__post_init__(self)
-
-    def close_result(self, msg: Message.ResponseRequired, name: str):
-        self._te_ready_dict[name] = None
-        _ = msg
-
-    def close_one(self, name: str) -> None:
-        self._te_ready_dict[name] = False
-        self.perform_thread_action(name, self.thread_classes[name].Messages.Close(),
-                                   self.close_result, **dict(name=name))
-
-    # def close(self):
-    #     [self.close_one(name) for name in self._instruments_list]
-
-    def check_result(self, msg: Message.ResponseRequired, name: str):
-        self._te_ready_dict[name] = msg.is_success
-        self.perform_view_action(self, 'update_instrument', name, 'good' if msg.is_success else 'bad')
-
-    def check_one(self, name: str) -> None:
-        self._te_ready_dict[name] = False
-        self.perform_thread_action(name, self.thread_classes[name].Messages.Check(),
-                                   self.check_result, **dict(name=name))
-        self.perform_view_action(self, 'update_instrument', name, 'checking')
-
-    def check(self) -> None:
-        [self.check_one(name) for name in self._instruments_list]
-
-
-class Mode(CellCounterpart):
-    def change(self, msg: ControllerAction):
-        if msg == 'rework':
-            major, minor = 'not in test mode', 'scan DUT to view results'
-        else:
-            major, minor = 'ready to test', 'scan DUT to continue'
-        self.perform_view_action('instruction', 'set', major, minor)
-        log.info(f'performing {msg}')
+def _make_one(fresh: bool = False) -> OneHistoryMessage:
+    dt = datetime.datetime.now()
+    if not fresh:
+        # dt -= datetime.timedelta(hours=randint(0, 8), minutes=randint(0, 59), seconds=randint(0, 59))
+        dt -= datetime.timedelta(minutes=randint(0, 59), seconds=randint(0, 59))
+    return OneHistoryMessage(
+        id=randint(100, 100000000),
+        pf=bool(randint(0, 1)),
+        dt=dt,
+        mn='10-00938' if randint(0, 1) else '10-00962',
+        sn=choice(_sns),
+    )
 
 
 class TestSteps(CellCounterpart):
@@ -194,11 +139,21 @@ class Controller(parent_terminus(ControllerAction, ViewAction), Process):
     scan_methods: List[Tuple[str, re.Pattern]]
     subscribed_methods: Dict[Type, str]
     iteration_t: Type
+    _station_mode: StationMode
 
-    def poll(self) -> None:
-        Process.poll(self)
-        [o.poll() for o in self.children]
+    @scan_method(re.compile(r'(?i)\[DUT#\|(\d{5}):(\d{8})]'))
+    def old_dut_scan(self, mn: str, sn: str) -> None:
+        pass
 
+    @scan_method(re.compile(r'(?i)\[DUT\|(\d{5}):(\d{8}):(.{12})]'))
+    def dut_scan(self, mn: str, sn: str, option: str) -> None:
+        pass
+
+    @scan_method(re.compile(r'(?i)\[PSU#\|(\w{4}):(\d{3})-(\d{4})]'))
+    def psu_label_scan(self, job_code: str, shipment: str, sn: str):
+        pass
+
+    @subscribe(ScanMessage)
     def scan(self, scan_string: str) -> None:
         for f, pattern in self.scan_methods or []:
             parsed = pattern.findall(scan_string)
@@ -208,42 +163,58 @@ class Controller(parent_terminus(ControllerAction, ViewAction), Process):
 
         log.info(f'unhandled scan -> {scan_string}')
 
+    @subscribe(GetFullHistoryMessage)
     def get_history(self) -> None:
-        raise NotImplementedError
+        # TODO: get and format records from database
+        self.send(FullHistoryMessage(records=[_make_one() for _ in range(randint(20, 40))]))
+
+    @subscribe(ModeChangeMessage)
+    def mode_change(self, mode: StationMode):
+        if not self.is_testing:
+            if mode == StationMode.REWORK:
+                self.send(InstructionMessage('not in test mode', 'scan DUT to view results'))
+            else:
+                self.send(InstructionMessage('ready to test', 'scan DUT to continue'))
+        self._station_mode = mode
+        self.send(ModeChangeMessage(self._station_mode))
+        log.info(f'changed to {mode}')
+
+    @subscribe(TECheckMessage)
+    def te_check(self) -> None:
+        pass
 
     def add_one_to_history(self) -> None:
-        raise NotImplementedError
+        self.send(_make_one(True))
 
-    def change_mode(self, mode) -> None:
-        raise NotImplementedError
+    def handle_message(self, msg: dataclass) -> None:
+        method = getattr(self, self.subscribed_methods[type(msg)], None)
+        if callable(method):
+            method(*fields(msg))
+        log.warning(f'{msg} unhandled')
 
-    def te_check(self) -> None:
-        raise NotImplementedError
-
-    @scan_method(re.compile(r'(?i)\[DUT#\|(\d{5}):(\d{8})]'))
-    def old_dut_scan(self, mn: int, sn: int) -> None:
-        pass
-
-    @scan_method(re.compile(r'(?i)\[DUT\|(\d{5}):(\d{8}):(.{12})]'))
-    def dut_scan(self, mn: int, sn: int, option: str) -> None:
-        pass
+    def send(self, message: dataclass) -> None:
+        log.info(f'sending {message}')
+        self.q.put(message)
 
     def __post_init__(self):
         self._poll_delay_s = APP.G['POLLING_INTERVAL_MS'] / 1000
         self.perform_view_action = getattr(self, '_perform_other_action')
 
         self.children = list()
+        self.is_testing = False
+        self._station_mode = StationMode.TESTING
 
-        self.mode = Mode(self)
-        self.history = History(self)
         self.test_steps = TestSteps(self)
         # self.instruments = Instruments(self, APP.STATION.instruments)
+
+        self.session_manager = connect()
 
         logger.to_main_process(self._log_q).start()
         Process.__post_init__(self)
 
     def on_shutdown(self):
         [o.close() for o in self.children]
+        atexit_proxy.perform(log)
 
     def __init__(self, log_q):
         Process.__init__(self, log_q, name='Controller', log_name=__name__)

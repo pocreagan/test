@@ -1,2 +1,3 @@
 @echo off
-"C:\Projects\test_framework\build\bin\Debug\Debug.exe"
+"C:\Projects\test\build\bin\Testing\Testing.exe"
+if ERRORLEVEL 1 pause

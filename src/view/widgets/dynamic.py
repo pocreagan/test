@@ -276,10 +276,7 @@ class Chart(Cell):
         _bg = COLORS.black
         _dpi = self.parent.screen.dpi
 
-        _import_path = APP.STATION.import_path
-        _import_path = ('stations', 'lighting', 'station3')
-        chart_module = dynamic_import('chart', *_import_path)
-        _plot_cla: Root = getattr(chart_module, 'Plot')
+        _plot_cla: Root = getattr(dynamic_import('chart', *APP.STATION.import_path), 'Plot')
 
         _fake_mn = 938
 

@@ -93,7 +93,7 @@ class Root(Widget, Generic[_T]):
     canvas: Optional[FigureCanvasTkAgg]
     background_img: Optional[FigureImage]
 
-    def __init__(self, params: _T, w: int = 1429, h: int = 799,
+    def __init__(self, params, w: int = 1429, h: int = 799,
                  dpi: int = 141, color: str = '#000000', **kwargs) -> None:
         Widget.__init__(self)
 

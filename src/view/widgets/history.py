@@ -78,7 +78,7 @@ class Mode(Cell):
         self._set(name)
         self.fresh_data()
 
-    def handle_response(self, msg) -> None:
+    def handle_response(self, msg: ModeChangeMessage) -> None:
         """
         do something when controller returns mode change request
         """
