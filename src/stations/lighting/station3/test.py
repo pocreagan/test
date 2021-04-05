@@ -6,12 +6,6 @@ from typing import Union
 
 from attrdict import AttrDict
 
-from instruments.wet.rs485 import ConfigRegister
-from instruments.wet.rs485 import FirmwareIncrement
-from model.vc_messages import StepFinishMessage
-from model.vc_messages import StepMinorTextMessage
-from model.vc_messages import StepProgressMessage
-from model.vc_messages import StepStartMessage
 from src.base.general import test_nom_tol
 from src.base.log import logger
 from src.instruments.base.instrument import instruments_joined
@@ -22,6 +16,8 @@ from src.instruments.light_meter import LightMeasurement
 from src.instruments.light_meter import LightMeter
 from src.instruments.light_meter import LightMeterError
 from src.instruments.light_meter import ThermalDropSample
+from src.instruments.wet.rs485 import ConfigIncrement
+from src.instruments.wet.rs485 import FirmwareIncrement
 from src.instruments.wet.rs485 import MicroState
 from src.instruments.wet.rs485 import RS485
 from src.instruments.wet.rs485 import RS485Error
@@ -38,6 +34,10 @@ from src.model.db.schema import LightingStation3LightMeasurement
 from src.model.db.schema import LightingStation3LightMeterCalibration
 from src.model.db.schema import LightingStation3ParamRow
 from src.model.db.schema import LightingStation3ResultRow
+from src.model.vc_messages import StepFinishMessage
+from src.model.vc_messages import StepMinorTextMessage
+from src.model.vc_messages import StepProgressMessage
+from src.model.vc_messages import StepStartMessage
 from src.stations.lighting.station3.model import Station3Model
 from src.stations.lighting.station3.model import Station3ModelBuilder
 from src.stations.test_station import TestFailure
@@ -48,11 +48,6 @@ log = logger(__name__)
 __all__ = [
     'Station3',
 ]
-
-_light_test_step_name = 'STRING'
-_config_test_step_name = 'CONFIG'
-_firmware_test_step_name = 'FIRMWARE'
-_unit_identity_test_step_name = 'EEPROM'
 
 
 class Station3(TestStation):
@@ -106,12 +101,11 @@ class Station3(TestStation):
 
         light_measurements: List[LightingStation3LightMeasurement] = []
         _duration = params.duration
-        _test_step_k = self._test_step_k
+        _test_step_k = self.increment_test_step_k()
 
         self.emit(StepStartMessage(k=_test_step_k, minor_text=params.name, max_val=_duration))
 
         _emit = self.emit
-        _step_name = _light_test_step_name
 
         def consumer(sample: ThermalDropSample) -> None:
             model = LightingStation3LightMeasurement(pct_drop=sample.pct_drop, te=sample.te)
@@ -159,12 +153,12 @@ class Station3(TestStation):
     def configure(self, config: Configuration, wait_after: bool) -> EEPROMConfigIteration:
         config_model = self.iteration.add(EEPROMConfigIteration(config_id=config.config_id))
         _emit = self.emit
-        _test_step_k = self._test_step_k
+        _test_step_k = self.increment_test_step_k()
         _num_registers = len(config.registers)
 
         self.emit(StepStartMessage(k=_test_step_k, minor_text='write', max_val=_num_registers * 2))
 
-        def consumer(message: ConfigRegister) -> None:
+        def consumer(message: ConfigIncrement) -> None:
             if message.i == _num_registers:
                 _emit(StepMinorTextMessage(k=_test_step_k, minor_text='confirm'))
             _emit(StepProgressMessage(k=_test_step_k, value=message.i))
@@ -187,7 +181,7 @@ class Station3(TestStation):
     @instruments_joined
     def unit_identity(self, unit: LightingDUT, do_write: bool) -> ConfirmUnitIdentityIteration:
         unit_identity_confirmation_model = self.iteration.add(ConfirmUnitIdentityIteration())
-        _test_step_k = self._test_step_k
+        _test_step_k = self.increment_test_step_k()
 
         self.emit(StepStartMessage(k=_test_step_k))
 
@@ -210,14 +204,6 @@ class Station3(TestStation):
             self.emit(StepFinishMessage(k=_test_step_k, success=True))
 
         return unit_identity_confirmation_model
-
-    @instruments_joined
-    def perform_cooldown_check(self) -> None:
-        with self.session_manager() as session:
-            if not LightingStation3Iteration.is_cooldown_done(
-                    session, self.unit, self.model.cooldown_interval_s
-            ):
-                raise TestFailure('cooldown period has not elapsed')
 
     @instruments_joined
     def perform_connection_check(self) -> None:
@@ -243,7 +229,7 @@ class Station3(TestStation):
             firmware_iteration_model = self.iteration.add(FirmwareIteration(
                 firmware_id=self.model.firmware_object.version_id,
             ))
-            _test_step_k = self._test_step_k
+            _test_step_k = self.increment_test_step_k()
 
             self.emit(StepStartMessage(k=_test_step_k))
 
@@ -304,7 +290,7 @@ class Station3(TestStation):
             station.setup(unit)
             try:
                 while 1:
-                    for f_name in ('cooldown_check', 'connection_check', 'run'):
+                    for f_name in ('connection_check', 'run'):
                         sleep(1.)
                         print('\n\n')
                         user_input = input(f'proceed with {f_name}? -> ')

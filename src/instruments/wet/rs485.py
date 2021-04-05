@@ -16,8 +16,8 @@ from typing import Tuple
 from typing import Union
 
 from src.base import register
-from model import configuration
-from base.concurrency import proxy
+from src.model import configuration
+from src.base.concurrency import proxy
 from src.instruments.base.ftdi import DATA_BITS
 from src.instruments.base.ftdi import FTDI
 from src.instruments.base.ftdi import PacketCharacteristics
@@ -36,6 +36,8 @@ __all__ = [
     'RS485',
     'RS485Error',
     'MicroState',
+    'ConfigIncrement',
+    'FirmwareIncrement',
 ]
 
 

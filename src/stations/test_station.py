@@ -10,7 +10,7 @@ from typing import TypeVar
 
 from typing_extensions import Protocol
 
-from model.vc_messages import StepFinishMessage
+from src.model.vc_messages import StepFinishMessage
 from src.base.db.connection import SessionManager
 from src.base.db.connection import SessionType
 from src.base.log.mixin import Logged
@@ -87,12 +87,16 @@ class TestStation(instrument.InstrumentHandler, Logged, Generic[_MT, _IT]):
         self._emit(msg)
         return msg
 
-    def on_test_failure(self, e: Exception) -> None:
-        self.emit(StepFinishMessage(k=self._test_step_k, success=False))
+    def on_test_failure(self, e: TestFailure) -> None:
+        self.emit(StepFinishMessage(
+            k=self._test_step_k if e.test_step_id is None else e.test_step_id,
+            success=False
+        ))
         self.emit(str(e))
 
-    def increment_test_step_k(self) -> None:
+    def increment_test_step_k(self) -> int:
         self._test_step_k += 1
+        return self._test_step_k
 
     def setup(self, unit: DUTIdentityModel) -> None:
         self.unit = unit

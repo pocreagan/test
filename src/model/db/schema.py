@@ -31,7 +31,6 @@ from sqlalchemy.sql.sqltypes import LargeBinary
 from sqlalchemy.sql.sqltypes import String
 from sqlalchemy.sql.sqltypes import Text
 
-from model.vc_messages import MetricsMessage
 from src.base.db.connection import SessionType
 from src.base.db.meta import *
 from src.model.configuration import get_configs_on_object
