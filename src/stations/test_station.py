@@ -10,17 +10,17 @@ from typing import TypeVar
 
 from typing_extensions import Protocol
 
-from src.model.vc_messages import StepFinishMessage
+from src.base.concurrency import proxy
 from src.base.db.connection import SessionManager
 from src.base.db.connection import SessionType
-from src.base.log.mixin import Logged
 from src.instruments.base import instrument
 from src.model.db.schema import AppConfigUpdate
 from src.model.db.schema import YamlFile
+from src.model.vc_messages import StepFinishMessage
 
 __all__ = [
     'TestStation',
-    'DUTIdentityModel',
+    'DUTIdentityModelProtocol',
     'TestFailure',
     'StepFailure',
     'StationFailure',
@@ -47,7 +47,7 @@ class StationFailure(Failure):
     pass
 
 
-class DUTIdentityModel(Protocol):
+class DUTIdentityModelProtocol(Protocol):
     sn: int
     mn: int
     option: Optional[str] = None
@@ -57,22 +57,21 @@ _IT = TypeVar('_IT')
 _MT = TypeVar('_MT')
 
 
-class TestStation(instrument.InstrumentHandler, Logged, Generic[_MT, _IT]):
+class TestStation(instrument.InstrumentHandler, Generic[_MT, _IT]):
     model_builder_t: Type[_MT]
     model_builder: _MT
     iteration_t: Type[_IT]
     iteration: _IT
     session_manager: SessionManager
-    unit: DUTIdentityModel
+    unit: DUTIdentityModelProtocol
     model: dataclass
     session: SessionType
     config: Dict[str, Any]
-    _test_step_k: int
 
     def __init__(self, session_manager: SessionManager,
-                 controller_q: Callable = None, controller_flag=None) -> None:
-        self._emit = controller_q if callable(controller_q) else self.info
-        self._controller_flag = controller_flag
+                 controller_q: Callable = None, view_q: Callable = None) -> None:
+        self._emit = view_q if callable(view_q) else self.info
+        self._controller_q = controller_q
         self.session_manager = session_manager
         with self.session_manager() as session:
             [YamlFile.update_object(session, inst) for inst in chain([self], self.instruments.values())]
@@ -88,30 +87,21 @@ class TestStation(instrument.InstrumentHandler, Logged, Generic[_MT, _IT]):
         return msg
 
     def on_test_failure(self, e: TestFailure) -> None:
-        self.emit(StepFinishMessage(
-            k=self._test_step_k if e.test_step_id is None else e.test_step_id,
-            success=False
-        ))
-        self.emit(str(e))
+        if e.test_step_id is not None:
+            self.emit(StepFinishMessage(
+                k=e.test_step_id,
+                success=False
+            ))
+        self.emit(e)
 
-    def increment_test_step_k(self) -> int:
-        self._test_step_k += 1
-        return self._test_step_k
-
-    def setup(self, unit: DUTIdentityModel) -> None:
+    def setup(self, unit: DUTIdentityModelProtocol) -> None:
         self.unit = unit
         self.model = self.model_builder.for_dut(self.unit)
 
-    def cooldown_check(self) -> None:
-        try:
-            self.perform_cooldown_check()
+        self.emit(self.unit)
+        self.emit(self.model.step_ids.for_view)
 
-        except TestFailure as e:
-            self.on_test_failure(e)
-
-        except Exception as e:
-            raise StationFailure(str(e)) from e
-
+    @proxy.exposed
     def connection_check(self) -> None:
         try:
             self.perform_connection_check()
@@ -122,10 +112,10 @@ class TestStation(instrument.InstrumentHandler, Logged, Generic[_MT, _IT]):
         except Exception as e:
             raise StationFailure(str(e)) from e
 
+    @proxy.exposed
     def run(self):
         self.iteration = self.iteration_t()
         self.iteration.dut = self.unit
-        self._test_step_k = 0
         try:
             self.perform_test()
 
@@ -140,13 +130,6 @@ class TestStation(instrument.InstrumentHandler, Logged, Generic[_MT, _IT]):
             session.add(self.iteration)
 
         return self.iteration
-
-    def perform_cooldown_check(self) -> None:
-        """
-        after dut has been set, check for previous test times
-        raise TestError if DUT was tested too recently
-        """
-        raise NotImplementedError
 
     def perform_connection_check(self) -> None:
         """

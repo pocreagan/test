@@ -61,7 +61,7 @@ CONN_T = Type[CONN]
 
 class Connection:
     _sentinel = '$Connection._sentinel:END$'
-    _start_message = '$$Connection._sentinel:START$'
+    _start_message = '$Connection._sentinel:START$'
 
     def __init__(self, tx: ENDPOINT, rx: ENDPOINT) -> None:
         self.tx, self.rx = tx, rx

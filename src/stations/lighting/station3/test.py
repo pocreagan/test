@@ -6,6 +6,7 @@ from typing import Union
 
 from attrdict import AttrDict
 
+from base.concurrency import proxy
 from src.base.general import test_nom_tol
 from src.base.log import logger
 from src.instruments.base.instrument import instruments_joined
@@ -101,7 +102,7 @@ class Station3(TestStation):
 
         light_measurements: List[LightingStation3LightMeasurement] = []
         _duration = params.duration
-        _test_step_k = self.increment_test_step_k()
+        _test_step_k = self.model.step_ids.string_checks[params.id]
 
         self.emit(StepStartMessage(k=_test_step_k, minor_text=params.name, max_val=_duration))
 
@@ -153,7 +154,8 @@ class Station3(TestStation):
     def configure(self, config: Configuration, wait_after: bool) -> EEPROMConfigIteration:
         config_model = self.iteration.add(EEPROMConfigIteration(config_id=config.config_id))
         _emit = self.emit
-        _test_step_k = self.increment_test_step_k()
+        _test_step_k = self.model.step_ids.initial_config if config.is_initial else \
+            self.model.step_ids.final_config
         _num_registers = len(config.registers)
 
         self.emit(StepStartMessage(k=_test_step_k, minor_text='write', max_val=_num_registers * 2))
@@ -181,7 +183,7 @@ class Station3(TestStation):
     @instruments_joined
     def unit_identity(self, unit: LightingDUT, do_write: bool) -> ConfirmUnitIdentityIteration:
         unit_identity_confirmation_model = self.iteration.add(ConfirmUnitIdentityIteration())
-        _test_step_k = self.increment_test_step_k()
+        _test_step_k = self.model.step_ids.unit_identity
 
         self.emit(StepStartMessage(k=_test_step_k))
 
@@ -229,7 +231,7 @@ class Station3(TestStation):
             firmware_iteration_model = self.iteration.add(FirmwareIteration(
                 firmware_id=self.model.firmware_object.version_id,
             ))
-            _test_step_k = self.increment_test_step_k()
+            _test_step_k = self.model.step_ids.firmware
 
             self.emit(StepStartMessage(k=_test_step_k))
 
@@ -285,9 +287,16 @@ class Station3(TestStation):
     @classmethod
     def debug_test(cls, unit: LightingDUT) -> None:
         with logger:
-            station = Station3(connect(echo_sql=True))
+            station = Station3(connect(echo_sql=False))
             station.instruments_setup()
             station.setup(unit)
+            # station = station.proxy_spawn()
+            # fake_promise: proxy.Promise = station.fake_long_method()
+            # sleep(3.)
+            # fake_promise.cancel()
+            # station = station.proxy_join()
+            # station.instruments_cleanup()
+
             try:
                 while 1:
                     for f_name in ('connection_check', 'run'):

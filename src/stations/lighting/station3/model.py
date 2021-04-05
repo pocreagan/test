@@ -7,19 +7,19 @@ from typing import List
 from typing import Optional
 from typing import Type
 
-from src.model.db.schema import LightingStation3ParamRow
-from src.model.db.schema import AppConfigUpdate
 from src.base.db.connection import SessionManager
 from src.base.db.connection import SessionType
 from src.instruments.dc_power_supplies import connection_states
 from src.instruments.dc_power_supplies.connection_states import ConnectionStateCalcType
 from src.model import configuration
+from src.model.db.schema import AppConfigUpdate
 from src.model.db.schema import Configuration
 from src.model.db.schema import EEPROMConfig
 from src.model.db.schema import Firmware
 from src.model.db.schema import FirmwareVersion
 from src.model.db.schema import LightingDUT
 from src.model.db.schema import LightingStation3Param
+from src.model.db.schema import LightingStation3ParamRow
 from src.model.db.schema import YamlFile
 
 __all__ = [
@@ -34,6 +34,24 @@ class Station3ChartParamsModel:
     param_id: int
     mn: int
     rows: List[LightingStation3ParamRow]
+
+
+@dataclass
+class Station3StepIDs:
+    firmware: Optional[int] = None
+    initial_config: Optional[int] = None
+    final_config: Optional[int] = None
+    unit_identity: Optional[int] = None
+    string_checks: Dict[int, int] = field(default_factory=dict)
+
+    @property
+    def for_view(self) -> Dict[int, str]:
+        r = ((self.firmware, 'FIRMWARE'),
+             (self.initial_config, 'INITIAL CFG'),
+             (self.final_config, 'FINAL CFG'),
+             (self.unit_identity, 'EEPROM'),)
+        r += tuple((v, 'STRING') for v in self.string_checks.values())
+        return {k: v for k, v in r if k is not None}
 
 
 @dataclass
@@ -55,6 +73,7 @@ class Station3Model:
     firmware_object: Optional[Firmware] = None
     params_obj: Optional[LightingStation3Param] = None
     string_params_rows: List[LightingStation3ParamRow] = field(default_factory=list)
+    step_ids: Station3StepIDs = None
 
 
 class Station3ModelBuilder:
@@ -101,25 +120,40 @@ class Station3ModelBuilder:
             if option:
                 config_dict.update(model_options.get(option, {}))
         model = Station3Model(config_rev=self.last_rev, **config_dict)
+        model.step_ids = Station3StepIDs()
         model.params_obj = LightingStation3Param.get(session, model.param_sheet)
         model.string_params_rows = list(sorted(model.params_obj.rows, key=attrgetter('row_num')))
         model.connection_calc_type = getattr(connection_states, model.connection_calc)
-        for initial, cfg_name in enumerate(['final_config', 'initial_config']):
-            cfg_sheet_name = getattr(model, cfg_name)
-            if cfg_sheet_name is not None:
-                config_object = EEPROMConfig.get(
-                    session, cfg_sheet_name, is_initial=bool(initial)
-                )
-                eeprom_config = {(0x5, i): 0x0 for i in range(34, 48)} if initial else {}
-                eeprom_config.update(config_object.registers)
-                config_object.registers = {k: eeprom_config[k] for k in sorted(eeprom_config)}
-                setattr(model, f'{cfg_name}_object', config_object)
         if (model.firmware_force_overwrite or model.program_with_thermal) and not model.firmware:
             raise ValueError(
                 'fw version must be specified if firmware_force_overwrite or program_with_thermal'
             )
+        _last_step_id = -1
         if model.firmware:
             model.firmware_object = FirmwareVersion.get(
                 session, f'lighting\\firmware\\{model.firmware}.dta'
             )
+            _last_step_id += 1
+            model.step_ids.firmware = _last_step_id
+        for final, cfg_name in enumerate(['initial_config', 'final_config']):
+            cfg_sheet_name = getattr(model, cfg_name)
+            if cfg_sheet_name is not None:
+                config_object = EEPROMConfig.get(
+                    session, cfg_sheet_name, is_initial=not bool(final)
+                )
+                eeprom_config = {} if final else {(0x5, i): 0x0 for i in range(34, 48)}
+                eeprom_config.update(config_object.registers)
+                config_object.registers = {k: eeprom_config[k] for k in sorted(eeprom_config)}
+                setattr(model, f'{cfg_name}_object', config_object)
+                _last_step_id += 1
+                setattr(model.step_ids, cfg_name, _last_step_id)
+
+        if model.unit_identity is not None:
+            _last_step_id += 1
+            model.step_ids.unit_identity = _last_step_id
+
+        for row in model.string_params_rows:  # type: LightingStation3ParamRow
+            _last_step_id += 1
+            model.step_ids.string_checks[row.id] = _last_step_id
+
         return model

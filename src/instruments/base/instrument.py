@@ -4,6 +4,8 @@ from itertools import count
 from time import sleep
 from time import time
 from typing import Callable
+from typing import Dict
+from typing import List
 from typing import Optional
 from typing import Type
 from typing import TypeVar
@@ -236,44 +238,49 @@ class StringInstrument(Instrument):
 _TC = TypeVar('_TC')
 
 
-def with_method_done(method_name: str):
+def with_method_done(spawned: bool):
     def outer(f: _TC) -> _TC:
         @wraps(f)
-        def inner(self, *args, **kwargs):
-            getattr(self, method_name)()
-            try:
-                return f(self, *args, **kwargs)
-            finally:
-                self.instruments_return_to_last_state()
+        def inner(self: 'InstrumentHandler', *args, **kwargs):
+            _prev = self.instruments_spawned
+            if spawned ^ _prev:
+                getattr(self, ['instruments_join', 'instruments_spawn'][int(spawned)])()
+                try:
+                    return f(self, *args, **kwargs)
+                finally:
+                    getattr(self, ['instruments_join', 'instruments_spawn'][int(_prev)])()
+            return f(self, *args, **kwargs)
 
         return inner  # type: ignore
 
     return outer
 
 
-instruments_joined = with_method_done('instruments_join')
-instruments_spawned = with_method_done('instruments_spawn')
+instruments_joined = with_method_done(False)
+instruments_spawned = with_method_done(True)
 
 
-class InstrumentHandler(register.Mixin, Logged):
+class InstrumentHandler(Logged, proxy.Mixin, register.Mixin):
+    instruments: Dict[str, Instrument]
+
     @register.before('__init__')
     def _build_instrument_list(self) -> None:
         self.last_spawn_state = False
         self.instruments_spawned = False
         self.instruments = getattr(self, _test_instruments_key, {})
+        self.proxy_make_sync_primitives()
+        self.__instrument('instrument_add_check_flag', self.proxy_cancel_flag)
 
-    def __instrument(self, method_name: str) -> None:
-        [getattr(inst, method_name)() for inst in self.instruments.values()]
+    def __instrument(self, method_name: str, *args, **kwargs) -> None:
+        results = [getattr(inst, method_name)(*args, **kwargs) for inst in self.instruments.values()]
+        [r.resolve() if isinstance(r, proxy.Promise) else r for r in results]
 
     def __proxy(self, method_name: str) -> None:
-        [setattr(self, k, getattr(v, method_name)()) for k, v in self.instruments.items()]
-        self.instruments_spawned, self.last_spawn_state = 'spawn' in method_name, self.instruments_spawned
-
-    def instruments_return_to_last_state(self) -> None:
-        if self.last_spawn_state:
-            self.instruments_spawn()
-        else:
-            self.instruments_join()
+        names, instruments = list(zip(*self.instruments.items()))
+        [setattr(self, k, getattr(v, method_name)()) for k, v in zip(names, instruments)]
+        self.instruments = {k: getattr(self, k) for k in names}
+        self.instruments_spawned = 'spawn' in method_name
+        self.info(f'performed {method_name}')
 
     def instruments_setup(self) -> None:
         """

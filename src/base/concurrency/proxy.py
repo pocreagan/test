@@ -22,6 +22,7 @@ from typing import Tuple
 from typing import TypeVar
 
 # noinspection SpellCheckingInspection
+from src.base.general import setdefault_attr_from_mro_or_factory
 from src.base import atexit_proxy as atexit
 from src.base.concurrency.concurrency import make_duplex_connection
 from src.base.concurrency.concurrency import SYNC_COMM_ERROR_T
@@ -203,17 +204,20 @@ class Promise:
     def resolve(self, timeout: float = None):
         if not self.resolved:
 
-            ti = time()
             for task in self._tasks:
                 # noinspection PyStatementEffect
-                task.resolve(self.proxy.proxy_q, None if timeout is None else ti - timeout).return_value
+                task.resolve(self.proxy.proxy_q, None if timeout is None else timeout).return_value
 
             self.__mark_resolved()
 
         return self.results
 
-    def cancel(self) -> None:
-        if not self.resolved:
+    def cancel(self):
+        if self.resolved:
+            return self.results
+        try:
+            return self.resolve(0.)
+        except PromiseError:
             self.proxy.proxy_cancel_flag.set()
             self.__mark_cancelled()
 
@@ -294,7 +298,7 @@ class _ProxyServer(Thread, _SyncMixin):
     def __init__(self, *sync_args) -> None:
         Thread.__init__(
             self, target=self.__main, name=type(self).__qualname__,
-            daemon=True, args=(*sync_args,),
+            daemon=False, args=(*sync_args,),
         )
 
     def __perform_one_scheduled_task(self) -> bool:
@@ -336,7 +340,7 @@ class _ProxyServer(Thread, _SyncMixin):
         _name = type(self).__name__
         self._next_task_t: Optional[float] = None
         self._scheduled_tasks: Deque[Task] = deque()
-        log.info(f'{_name}: spawned')
+        self.proxy_resource.info(f'{_name}: spawned')
 
         try:
             while 1:
@@ -348,7 +352,7 @@ class _ProxyServer(Thread, _SyncMixin):
         except SYNC_COMM_ERROR_T:
             self._scheduled_tasks.clear()
 
-        log.info(f'{_name}: joined')
+        self.proxy_resource.info(f'{_name}: joined')
         self.proxy_q.put_sentinel()
 
 
@@ -400,7 +404,7 @@ class exposed_directly:
         self._f = f
 
     def __set_name__(self, owner, name):
-        setdefault_attr_from_factory(owner, self.registry_key, dict)[name] = self
+        setdefault_attr_from_mro_or_factory(owner, self.registry_key, dict)[name] = self
         setattr(owner, name, self._f)
 
     def __get__(self, instance, owner) -> Callable:
@@ -577,6 +581,11 @@ class Mixin(_SyncMixin):
 
     _Mix_T = TypeVar('_Mix_T')
 
+    def proxy_make_sync_primitives(self) -> None:
+        proxy_side, resource_side = _make_synchronization_objects()
+        self.proxy_q, self.proxy_cancel_flag = proxy_side
+        [setattr(self, k, v) for k, v in zip(('_proxy_q', '_proxy_cancel_flag'), resource_side)]
+
     @exposed_directly
     def proxy_spawn(self: _Mix_T) -> _Mix_T:
         """
@@ -584,13 +593,20 @@ class Mixin(_SyncMixin):
         """
         if isinstance(getattr(self, 'proxy_resource', None), _ProxyServer):
             return self
+
         guard = self.proxy_spawn_guard()  # type: ignore
         if guard:
             raise ProxyError(guard)
-        (self.proxy_q, self.proxy_cancel_flag), (q, cancel_flag) = _make_synchronization_objects()
+
+        if not hasattr(self, '_proxy_q'):
+            (self.proxy_q, self.proxy_cancel_flag), (q, cancel_flag) = _make_synchronization_objects()
+        else:
+            q, cancel_flag = [getattr(self, k) for k in ('_proxy_q', '_proxy_cancel_flag')]
+
         handler = _ProxyServer(self, q, cancel_flag)
         handler.start()
         atexit.register(self.proxy_join)  # type: ignore
+
         return self.__make_proxy(handler)  # type: ignore
 
     @exposed_directly
@@ -598,16 +614,17 @@ class Mixin(_SyncMixin):
         """
         kill proxy server and return original self
         """
-        if not isinstance(getattr(self, 'resource', None), _ProxyServer):
+        if not isinstance(getattr(self, 'proxy_resource', None), _ProxyServer):
             return self
 
         self.proxy_cancel_flag.set()
         self.proxy_q.kill_other()
         self.proxy_resource.join()
         self.proxy_cancel_flag.clear()
-        resource = self.proxy_resource.resource
+        resource = self.proxy_resource.proxy_resource
         atexit.unregister(resource.proxy_join)
-        [delattr(self, attr) for attr in ('proxy_resource', 'proxy_cancel_flag', 'proxy_q')]
+        delattr(self, 'proxy_resource')
+
         return resource
 
     def proxy_check_cancelled(self) -> None:
