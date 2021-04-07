@@ -48,6 +48,7 @@ def instrument_debug(cls: Type[_T]) -> Optional[Type[_T]]:
 
 class Instrument(Logged, proxy.Mixin, register.Mixin):
     _should_be_open = False
+    display_name: str
     TX_WAIT_S: float
 
     _next_tx: float = 0.

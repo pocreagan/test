@@ -23,10 +23,10 @@ import yaml as yml
 from sqlalchemy import func
 from sqlalchemy import Table
 
-from base.general import WorkingDirectory
-from model.db.helper import make_hash
-from model.db.schema import FirmwareCode
-from model.db.schema import FirmwareVersion
+from src.base.general import WorkingDirectory
+from src.model.db.helper import make_hash
+from src.model.db.schema import FirmwareCode
+from src.model.db.schema import FirmwareVersion
 from src.base.db.connection import SessionType
 from src.base.log import logger
 from src.model.db import connect
@@ -73,7 +73,7 @@ _T = TypeVar('_T')
 class ConfigUpdate:
     kwargs = dict(
         # echo_sql=True,
-        drop_tables=True,
+        # drop_tables=True,
     )
     params_objects = ((r'lighting/station3/params.xlsx', LightingStation3Param, LightingStation3ParamRow),)
     new: int

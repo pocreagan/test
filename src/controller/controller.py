@@ -1,22 +1,22 @@
 import datetime
 import re
-import time
 from dataclasses import asdict
 from queue import Queue
-from random import choice
 from random import randint
 from typing import *
 
-from src.controller.base.enums import SubscribeTo
-from src.model.db.schema import LightingStation3ResultRow
+from sqlalchemy.orm import joinedload
+
 from src.base import atexit_proxy
 from src.base.concurrency.concurrency import *
 from src.base.log import logger
 from src.controller.base.decorators import scan_method
 from src.controller.base.decorators import subscribe
+from src.controller.base.enums import SubscribeTo
 from src.model.db import connect
 from src.model.db.schema import LightingDUT
 from src.model.db.schema import LightingStation3Iteration
+from src.model.db.schema import LightingStation3ResultRow
 from src.model.resources import APP
 from src.model.vc_messages import *
 from src.stations.lighting.station3.test import Station3
@@ -38,14 +38,14 @@ TEST_RUN_D_T = Dict[str, Union[int, bool, datetime.datetime, str, str]]
 _sns = [str(randint(2 ** 23, 2 ** 24 - 1)).zfill(8) for _ in range(5)]
 
 
-def _make_one_fake_entry(fresh: bool = False) -> HistoryAddEntryMessage:
-    dt = datetime.datetime.now()
-    if not fresh:
-        dt -= datetime.timedelta(minutes=randint(0, 59), seconds=randint(0, 59))
-    return HistoryAddEntryMessage(
-        id=randint(100, 100000000), pf=bool(randint(0, 1)), dt=dt,
-        mn='10-00938' if randint(0, 1) else '10-00962', sn=choice(_sns),
-    )
+# def _make_one_fake_entry(fresh: bool = False) -> HistoryAddEntryMessage:
+#     dt = datetime.datetime.now()
+#     if not fresh:
+#         dt -= datetime.timedelta(minutes=randint(0, 59), seconds=randint(0, 59))
+#     return HistoryAddEntryMessage(
+#         id=randint(100, 100000000), pf=bool(randint(0, 1)), dt=dt,
+#         mn='10-00938' if randint(0, 1) else '10-00962', sn=choice(_sns),
+#     )
 
 
 class Controller(Process):
@@ -82,20 +82,23 @@ class Controller(Process):
 
         log.info(f'unhandled scan -> {scan_string}')
 
+    def _make_one_history_entery(self, result) -> HistoryAddEntryMessage:
+        return HistoryAddEntryMessage(
+            result.id, bool(result.pf), result.created_at,
+            f'10-{str(result.dut.mn).zfill(5)}', str(result.dut.sn).zfill(8),
+        )
+
     @subscribe(HistoryGetAllMessage)
     def get_history(self) -> None:
-        # response = HistorySetAllMessage([])
-        # with self.session_manager() as session:
-        #     results: List[LightingStation3Iteration] = session.query(
-        #         self._iteration_cla, self._dut_cla
-        #     ).outerjoin(self._iteration_cla.dut).order_by(self._iteration_cla.created_at).limit(100).all()
-        #     for result in results:
-        #         response.records.append(HistoryAddEntryMessage(
-        #             result.id, bool(result.pf), result.created_at,
-        #             f'10-0{str(result.dut.mn).zfill(4)}', str(result.dut.sn).zfill(8),
-        #         ))
-        #     return self.publish(response)
-        self.publish(HistorySetAllMessage(records=[_make_one_fake_entry() for _ in range(randint(20, 40))]))
+        with self.session_manager() as session:
+            results: List[LightingStation3Iteration] = session.query(self._iteration_cla).options(
+                joinedload(self._iteration_cla.dut)
+            ).order_by(self._iteration_cla.created_at).limit(100).all()
+
+            # noinspection PyTypeChecker
+            return self.publish(HistorySetAllMessage(
+                list(map(self._make_one_history_entery, results))
+            ))
 
     @subscribe(ModeChangeMessage)
     def mode_change(self, mode: StationMode):
@@ -110,12 +113,15 @@ class Controller(Process):
 
     @subscribe(TECheckMessage)
     def te_check(self) -> None:
-        pass
+        # TODO: replace this with a call to test_station.instruments_check
+        self.test_station.send_fake_good_statuses()
 
     @subscribe(ViewInitDataMessage)
     def init_data(self) -> None:
         self.give_metrics()
         self.get_history()
+        self.test_station.send_test_instrument_names()
+
         with self.session_manager(expire=False) as session:
             iteration: LightingStation3Iteration = session.query(LightingStation3Iteration).first()
             _ = [f.firmware for f in iteration.firmware_iterations]
@@ -127,45 +133,46 @@ class Controller(Process):
             for measurement in iteration.result_rows:  # type: LightingStation3ResultRow
                 messages.extend([*measurement.light_measurements, measurement])
             messages.append(iteration)
-            # self.messages_iter = iter(messages)
-            self.messages_iter = iter([])
-            self._next_chart_message = time.time() + .05
         self.test_station.setup(dut)
 
     @subscribe(GetMetricsMessage)
     def give_metrics(self) -> None:
-        # response = MetricsMessage(0, 0, 0, 0)
-        # midnight = datetime.datetime.combine(datetime.date.today(), datetime.datetime.min.time())
-        # hour_ago = datetime.datetime.now() - datetime.timedelta(hours=1)
-        # with self.session_manager() as session:
-        #     for result in session.query(
-        #             self._iteration_cla
-        #     ).filter(self._iteration_cla.created_at >= midnight).all():
-        #         if result.p_pf:
-        #             response.pass_day += 1
-        #             if result.created_at >= hour_ago:
-        #                 response.pass_hour += 1
-        #         else:
-        #             response.fail_day += 1
-        #             if result.created_at >= hour_ago:
-        #                 response.fail_hour += 1
-        #     self.publish(response)
-        self.publish(MetricsMessage(randint(10, 20), 2, 151, 10))
+        response = MetricsMessage(0, 0, 0, 0)
+        midnight = datetime.datetime.combine(datetime.date.today(), datetime.datetime.min.time())
+        hour_ago = datetime.datetime.now() - datetime.timedelta(hours=1)
+        with self.session_manager() as session:
+            for result in session.query(
+                    self._iteration_cla
+            ).filter(self._iteration_cla.created_at >= midnight).all():
+                if result.pf:
+                    response.pass_day += 1
+                    if result.created_at >= hour_ago:
+                        response.pass_hour += 1
+                else:
+                    response.fail_day += 1
+                    if result.created_at >= hour_ago:
+                        response.fail_hour += 1
+            self.publish(response)
 
     def is_cooldown_done(self, dut, cooldown_interval: float) -> bool:
-        # with self.session_manager() as session:
-        #     result = session.query(self._iteration_cla).filter_by(
-        #         dut_id=dut.id
-        #     ).order_by(self._iteration_cla.created_at).one_or_none()
-        #     if result is None:
-        #         return True
-        #     return (datetime.datetime.now() - datetime.timedelta(
-        #         seconds=cooldown_interval)) > result.created_at
-        _ = self
+        # TODO: format datetime in notification message
+        with self.session_manager() as session:
+            result = session.query(self._iteration_cla).filter_by(
+                dut_id=dut.id
+            ).order_by(self._iteration_cla.created_at).one_or_none()
+            if result is None:
+                return True
+            done_time = result.created_at + datetime.timedelta(seconds=cooldown_interval)
+            if done_time > datetime.datetime.now():
+                self.publish(NotificationMessage(
+                    'cooldown required', f'{dut.sn} may be tested at {done_time}'
+                ))
+                return False
         return True
 
     def add_one_to_history(self) -> None:
-        self.publish(_make_one_fake_entry(True))
+        # self.publish(_make_one_fake_entry(True))
+        pass
 
     def poll(self) -> None:
         Process.poll(self)
@@ -201,7 +208,6 @@ class Controller(Process):
         # self.test_station.instruments_setup()
 
         logger.to_main_process(self._log_q).start()
-
 
     def on_shutdown(self):
         atexit_proxy.perform(self.log)

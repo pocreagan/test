@@ -21,6 +21,7 @@ from sqlalchemy import Column
 from sqlalchemy import func
 from sqlalchemy import UniqueConstraint
 from sqlalchemy.ext.declarative import DeclarativeMeta
+from sqlalchemy.orm import joinedload
 from sqlalchemy.sql.selectable import ScalarSelect
 from sqlalchemy.sql.sqltypes import Boolean
 from sqlalchemy.sql.sqltypes import DateTime
@@ -405,6 +406,13 @@ class LightingStation3Iteration(Schema):
     def add(self, obj: _T) -> _T:
         getattr(self, self.__collection_map[type(obj).__name__]).append(obj)
         return obj
+
+    @classmethod
+    def get_top(cls, session: SessionType, n: int) -> List['LightingStation3Iteration']:
+        results: List[LightingStation3Iteration] = session.query(
+            cls
+        ).options(joinedload(cls.dut)).order_by(cls.created_at).limit(n).all()
+        return results
 
 
 class LightingStation3ResultRow(Schema):

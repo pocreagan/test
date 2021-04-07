@@ -10,6 +10,9 @@ from typing import TypeVar
 
 from typing_extensions import Protocol
 
+from src.instruments.base.instrument import instruments_spawned
+from src.model.vc_messages import OneTEStatusMessage
+from src.model.vc_messages import TENamesMessage
 from src.model.vc_messages import StepsInitMessage
 from src.base.concurrency import proxy
 from src.base.db.connection import SessionManager
@@ -79,6 +82,26 @@ class TestStation(instrument.InstrumentHandler, Generic[_MT, _IT]):
             self.config_rev = AppConfigUpdate.get(session).id
         # noinspection PyTypeChecker
         self.model_builder = self.model_builder_t(self.session_manager)
+
+    def send_test_instrument_names(self) -> None:
+        self.emit(TENamesMessage([inst.display_name for inst in self.instruments.values()]))
+
+    def send_fake_good_statuses(self) -> None:
+        [self.emit(OneTEStatusMessage(inst.display_name, True)) for inst in self.instruments.values()]
+
+    @instruments_spawned
+    def instruments_check(self, consumer) -> bool:
+        _d = {inst.display_name: inst.instrument_check() for inst in self.instruments.values()}
+        results = dict()
+        while 1:
+            for display_name, d in _d.items():
+                _promise = d['promise']
+                if display_name not in results and _promise.poll():
+                    result = _promise.resolve()
+                    self.emit(OneTEStatusMessage(display_name, result))
+                    results[display_name] = result
+            if len(results) == len(_d):
+                return all(results.values())
 
     def emit(self, msg: _T) -> _T:
         """

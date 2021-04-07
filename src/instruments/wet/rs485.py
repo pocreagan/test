@@ -182,6 +182,7 @@ class WETCommandDynamicCommand:
 class RS485(Instrument):
     _config = configuration.from_yml(r'instruments\rs485.yml')
 
+    display_name = _config.field(str)
     SERIAL_BREAK_BYTES = _config.field(int)
     MAB_BYTES = _config.field(int)
     TX_WAIT_S = _config.field(float)

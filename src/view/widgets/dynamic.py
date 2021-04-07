@@ -1,19 +1,16 @@
 import tkinter as tk
 from dataclasses import dataclass
 from functools import partial
-from operator import attrgetter
 from tkinter import font
 from typing import *
+
 import matplotlib.pyplot as plt
 
-from model.db.schema import LightingStation3ParamRow
 from src.base.general import truncate
 from src.base.log import logger
-from src.model.db import connect
 from src.model.db.schema import LightingDUT
 from src.model.db.schema import LightingStation3Iteration
 from src.model.db.schema import LightingStation3LightMeasurement
-from src.model.db.schema import LightingStation3Param
 from src.model.db.schema import LightingStation3ResultRow
 from src.model.enums import MouseAction
 from src.model.load import dynamic_import
@@ -21,11 +18,14 @@ from src.model.resources import APP
 from src.model.resources import COLORS
 from src.model.vc_messages import InstructionMessage
 from src.model.vc_messages import NotificationMessage
+from src.model.vc_messages import OneTEStatusMessage
 from src.model.vc_messages import StepFinishMessage
 from src.model.vc_messages import StepMinorTextMessage
 from src.model.vc_messages import StepProgressMessage
 from src.model.vc_messages import StepsInitMessage
 from src.model.vc_messages import StepStartMessage
+from src.model.vc_messages import TECheckMessage
+from src.model.vc_messages import TENamesMessage
 from src.stations.lighting.station3.model import Station3ChartParamsModel
 from src.view.base.cell import *
 from src.view.base.component import *
@@ -114,6 +114,7 @@ class Instruments(Cell):
     shows station's instruments and their status
     on click, requests TE check from controller
     """
+    instruments: Dict[str, 'Instruments.Instrument']
 
     @dataclass
     class Instrument:
@@ -121,18 +122,18 @@ class Instruments(Cell):
         one instrument status label
         """
         widget: Label
-        state: str
+        state: Optional[bool] = None
         _colors = {
-            'checking': COLORS.white,
-            'bad': COLORS.red,
-            'good': COLORS.green,
+            None: COLORS.white,
+            False: COLORS.red,
+            True: COLORS.green,
         }
 
-        def update(self, state: str) -> None:
+        def update(self, state: Optional[bool]) -> None:
             """
             set state for one instrument label
             """
-            self.widget.color(fg=getattr(self._colors, state, 'bad'))
+            self.widget.color(fg=self._colors.get(state))
             self.state = state
 
         def __bool__(self) -> bool:
@@ -140,52 +141,46 @@ class Instruments(Cell):
             return whether instrument has been checked
             useful for accumulators
             """
-            return self.state != 'checking'
+            return self.state is not None
 
     def __post_init__(self):
-        _clickable = bool(len(APP.STATION.instruments))
-        _instruments = [inst for inst in APP.STATION.instruments]
-        _spot = 1 / len(_instruments)
-        _instruments.sort()
-        self.instruments: Dict[str, 'Instruments.Instrument'] = dict()
-        for i, s in enumerate(_instruments):
+        pass
+
+    @subscribe(TENamesMessage)
+    def set_display_names(self, display_names: List[str]) -> None:
+        _spot = 1 / len(display_names)
+        display_names.sort()
+        self.instruments = dict()
+        for i, s in enumerate(display_names):
             label = Label(self, anchor="center", font=self.font,
                           fg=COLORS.white,
                           bg=COLORS.medium_grey)
-            label.text(getattr(APP.INSTRUMENTS, s)['display_name'])
+            label.text(s)
             self.instruments[s] = self.Instrument(
-                widget=label.place(x=_spot * i, y=0, height=1, width=_spot), state='checking'
+                widget=label.place(x=_spot * i, y=0, height=1, width=_spot)
             )
+        self.get_fresh_data()
+
+    @subscribe(OneTEStatusMessage)
+    def update_instrument(self, display_name: str, state: bool):
+        """
+        if state has changed, updates one instrument label
+        if all instruments have been updated, enables widget
+        """
+        if self.instruments[display_name].state is not state:
+            self.instruments[display_name].update(state)
+            if all(self.instruments.values()):
+                self.fresh_data()
 
     def get_fresh_data(self):
         """
         ask controller for test equipment status
         """
         self.disable()
-        [v.update('checking') for v in self.instruments.values()]
-        # self.perform_controller_action(self, 'check')
+        [v.update(None) for v in self.instruments.values()]
+        self.publish(TECheckMessage())
 
-    def check_all_done(self) -> None:
-        """
-        if all instruments have been updated, change widget appearance
-        """
-        if all(self.instruments.values()):
-            self.fresh_data()
-
-    def update_instrument(self, name, state):
-        """
-        if state has changed, updates one instrument label
-        if all instruments have been updated, enables widget
-        """
-        if self.instruments[name].state != state:
-            self.instruments[name].update(state)
-            self.check_all_done()
-
-    def _on_show(self):
-        self.get_fresh_data()
-
-    def double_click(self, evt: tk.EventType):
-        _ = evt
+    def double_click(self, *_: tk.EventType):
         self.get_fresh_data()
 
 
@@ -269,7 +264,6 @@ class TestSteps(Cell):
         for i, (k, name) in enumerate(steps.items()):
             self.step_frames[k] = widget = StepProgress(self, name, 66)
             widget.pack(fill=tk.X, expand=0)
-            print(f'packed step -> {name}')
 
     @subscribe(StepStartMessage)
     def start_progress(self, k: int, minor_text: Optional[str], max_val: Optional[Union[int, float]]) -> None:
@@ -349,7 +343,7 @@ class Chart(Cell):
         if params.param_id != self.last_param_id:
             self.kill_chart()
             self._plot = self._plot_cla(params, w=self.w_co, h=self.h_co,
-                                   dpi=self.parent.screen.dpi, color=self._bg)
+                                        dpi=self.parent.screen.dpi, color=self._bg)
         self._plot.set_background()
         self._chart = self._plot.for_tk(self)
         self._chart.update()

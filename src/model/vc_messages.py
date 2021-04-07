@@ -11,7 +11,6 @@ __all__ = [
     'ScanMessage',
     'StationMode',
     'ModeChangeMessage',
-    'TECheckMessage',
     'InstructionMessage',
     'NotificationMessage',
     'HistoryGetAllMessage',
@@ -26,6 +25,9 @@ __all__ = [
     'GetMetricsMessage',
     'MetricsMessage',
     'ViewInitDataMessage',
+    'TECheckMessage',
+    'TENamesMessage',
+    'OneTEStatusMessage',
 ]
 
 
@@ -47,6 +49,17 @@ class ModeChangeMessage:
 @dataclass
 class TECheckMessage:
     pass
+
+
+@dataclass
+class TENamesMessage:
+    display_names: List[str]
+
+
+@dataclass
+class OneTEStatusMessage:
+    display_name: str
+    state: bool
 
 
 @dataclass

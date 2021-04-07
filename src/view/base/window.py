@@ -164,13 +164,18 @@ class Window(tk.Tk):
         log.info(f'STARTED.')
 
         self.hid = HID(self)
+        with self.hid:
+            self._q.get()
+
+        log.info('start message received from controller')
+
         self.configure_window()
         self.add_initial_widgets()
 
         self.__post_init__()
 
         log.info('View loaded')
-        self.after(50, self.start_polling)
+        self.after(50, self.poll)
 
     def start(self) -> None:
         """
@@ -207,17 +212,6 @@ class Window(tk.Tk):
         self.destroy()
 
         log.info('CLOSED')
-
-    def start_polling(self) -> None:
-        """
-        get started msg from controller and start polling
-        """
-        with self.hid:
-            self._q.get()
-
-        log.info('start message received from controller')
-
-        self.poll()
 
     def handle_keyboard_action(self, msg: KeyboardAction) -> None:
         """

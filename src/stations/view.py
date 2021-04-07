@@ -75,7 +75,7 @@ class StationView(View):
 
         # # bottom
         # left
-        # WidgetPosition(Instruments, _Instruments),
+        WidgetPosition(Instruments, _Instruments),
 
         # right
         WidgetPosition(TitleBar, _StatusBar),

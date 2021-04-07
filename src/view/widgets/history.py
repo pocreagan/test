@@ -1,10 +1,8 @@
 import collections
 import datetime
 import tkinter as tk
-from dataclasses import asdict
 from dataclasses import dataclass
 from functools import partial
-from itertools import starmap
 from typing import *
 
 from src.base.log import logger
@@ -195,7 +193,7 @@ class Metrics(Cell):
             self._numbers = _numbers
             _rows = self._numbers[:2], self._numbers[2:]
             [self._set_row('text', (p, f, self._make_pct(p, f)), i) for i, (f, p) in enumerate(_rows)]
-            [self._set_row('color', self._normal_colors, row) for row in range(2)]
+        [self._set_row('color', self._normal_colors, row) for row in range(2)]
         self.fresh_data()
 
 

@@ -36,8 +36,7 @@ class View(Window):  # type: ignore
 
         Window.__init__(self)
 
-    def start_polling(self) -> None:
-        Window.start_polling(self)
+    def __post_init__(self) -> None:
         self.publish(ViewInitDataMessage())
 
     def close(self) -> None:

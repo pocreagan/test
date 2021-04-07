@@ -6,7 +6,7 @@ from typing import Union
 
 from attrdict import AttrDict
 
-from base.concurrency import proxy
+from src.base.concurrency import proxy
 from src.base.general import test_nom_tol
 from src.base.log import logger
 from src.instruments.base.instrument import instruments_joined
@@ -283,6 +283,8 @@ class Station3(TestStation):
         self.iteration.pf = all(map(attrgetter('pf'), self.iteration.result_rows))
         if not self.iteration.pf:
             raise TestFailure('failed light checks')
+
+        self.emit(self.iteration)
 
     @classmethod
     def debug_test(cls, unit: LightingDUT) -> None:
